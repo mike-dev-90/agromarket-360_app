@@ -6,8 +6,10 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:agromarket_360_app/core/api_client.dart';
+import 'package:agromarket_360_app/core/form_widgets.dart';
 import 'package:agromarket_360_app/features/auctions/auction.dart';
 import 'package:agromarket_360_app/features/auth/auth_controller.dart';
+import 'package:agromarket_360_app/features/business/business_models.dart';
 import 'package:agromarket_360_app/features/catalog/livestock.dart';
 import 'package:agromarket_360_app/features/notifications/notification_item.dart';
 import 'package:agromarket_360_app/features/offers/offer.dart';
@@ -26,6 +28,23 @@ import '../support/fake_api.dart';
 ///
 /// Requiere el proyecto web con datos de demostración (comprador@agromarket.com / password, verificado).
 const _base = String.fromEnvironment('CONTRACT_API');
+
+final _sessions = <String, String>{}; // el login está limitado a 10/min: se reutiliza el token por cuenta
+
+Future<String> _tokenFor(String email) async {
+  final cached = _sessions[email];
+  if (cached != null) return cached;
+  final login = await _client(MemoryTokens()).post('/auth/login', data: {'email': email, 'password': 'password'});
+  return _sessions[email] = login['token'] as String;
+}
+
+Future<ApiClient> _as(String email) async {
+  final tokens = MemoryTokens();
+  await tokens.write(await _tokenFor(email));
+  return _client(tokens);
+}
+
+String _dt(int days) => apiDateTime(DateTime.now().add(Duration(days: days)));
 
 ApiClient _client(MemoryTokens tokens) => ApiClient(
       tokens,
@@ -103,9 +122,9 @@ void main() {
     final tokens = MemoryTokens();
     final api = _client(tokens);
 
-    final login = await api.post('/auth/login', data: {'email': 'comprador@agromarket.com', 'password': 'password'});
-    await tokens.write(login['token'] as String);
-    expect(AppUser.fromJson(login['user'] as Map<String, dynamic>).identityVerified, isTrue);
+    await tokens.write(await _tokenFor('comprador@agromarket.com'));
+    final me = await api.get('/auth/me');
+    expect(AppUser.fromJson(me['user'] as Map<String, dynamic>).identityVerified, isTrue);
 
     // Favoritos
     final fav = await api.post('/favorites', data: {'type': 'livestock', 'item_id': 1});
@@ -229,8 +248,7 @@ void main() {
     expect(detail.id, products.first.id);
     await expectLater(api.get('/cart'), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 401)));
 
-    final login = await api.post('/auth/login', data: {'email': 'comprador@agromarket.com', 'password': 'password'});
-    await tokens.write(login['token'] as String);
+    await tokens.write(await _tokenFor('comprador@agromarket.com'));
 
     await api.delete('/cart');
     final p = products.firstWhere((x) => x.stock >= 2);
@@ -269,8 +287,7 @@ void main() {
     final detail = ServiceItem.fromJson((await api.get('/services/${services.first.id}'))['data'] as Map<String, dynamic>);
     expect(detail.title, services.first.title);
 
-    final login = await api.post('/auth/login', data: {'email': 'comprador@agromarket.com', 'password': 'password'});
-    await tokens.write(login['token'] as String);
+    await tokens.write(await _tokenFor('comprador@agromarket.com'));
 
     await expectLater(api.post('/services/${services.first.id}/requests', data: {'description': 'corto'}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
     final tomorrow = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
@@ -292,5 +309,157 @@ void main() {
     expect(messages.single.isMine, isTrue);
     expect((thread['meta'] as Map)['other_user'], isNotNull);
     await api.post('/orders/${order['id']}/cancel');
+  }, skip: skip);
+
+  test('ganadero: perfil, publicar/editar/eliminar animal, oferta recibida y subasta', () async {
+    final buyer = await _as('comprador@agromarket.com');
+    final api = await _as('ganadero@agromarket.com');
+
+    final profile = (await api.get('/rancher/profile'))['data'] as Map<String, dynamic>;
+    expect(profile.containsKey('complete'), isTrue);
+    await expectLater(buyer.get('/rancher/livestock'), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 403)));
+
+    final dir = Directory.systemTemp.createTempSync('contract_rancher');
+    final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    final image = (File('${dir.path}/main.png')..writeAsBytesSync(png)).path;
+    final fields = {
+      'title': 'Toro de contrato', 'description': 'Prueba de contrato de la app', 'type': 'cattle', 'sex': 'male', 'price': '1800.50',
+      'negotiable': '1', 'location': 'Guayas', 'city': 'Guayaquil', 'is_vaccinated': '1', 'has_pedigree': '0', 'status': 'active', 'weight': '480.5',
+    };
+    await expectLater(api.postForm('/rancher/livestock', fields: fields), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final created = BizLivestock.fromJson((await api.postForm('/rancher/livestock', fields: fields, files: {'main_image': image}))['data'] as Map<String, dynamic>);
+    expect(created.price, 1800.5);
+    expect(created.status, 'active');
+
+    final mine = [for (final j in (await api.get('/rancher/livestock'))['data'] as List) BizLivestock.fromJson(j as Map<String, dynamic>)];
+    expect(mine.any((a) => a.id == created.id), isTrue);
+    final edited = BizLivestock.fromJson((await api.postForm('/rancher/livestock/${created.id}', fields: {...fields, 'title': 'Toro editado', 'price': '1700'}))['data'] as Map<String, dynamic>);
+    expect(edited.title, 'Toro editado');
+    expect(edited.price, 1700);
+
+    // El comprador ofrece y el ganadero contraoferta.
+    final offer = (await buyer.post('/offers', data: {'livestock_id': created.id, 'offer_price': 1500}))['data'] as Map<String, dynamic>;
+    final received = [for (final j in (await api.get('/rancher/offers'))['data'] as List) RancherOffer.fromJson(j as Map<String, dynamic>)];
+    final mineOffer = received.firstWhere((o) => o.id == offer['id']);
+    expect(mineOffer.awaitingYou, isTrue);
+    await expectLater(api.post('/rancher/offers/${mineOffer.id}/reject', data: {}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final countered = RancherOffer.fromJson((await api.post('/rancher/offers/${mineOffer.id}/negotiate', data: {'offer_price': 1650}))['data'] as Map<String, dynamic>);
+    expect(countered.status, 'negotiating');
+    expect(countered.offerPrice, 1650);
+    expect(countered.awaitingYou, isFalse);
+
+    // Subasta: fechas inválidas rechazadas, válida creada, cancelable sin pujas.
+    final auctionData = {
+      'title': 'Lote de contrato', 'description': 'Subasta de prueba', 'starting_price': 400, 'min_bid_increment': 20,
+      'start_time': _dt(1), 'end_time': _dt(3), 'status': 'pending', 'type': 'cattle', 'sex': 'male', 'location': 'Guayas',
+    };
+    await expectLater(api.post('/rancher/auctions', data: {...auctionData, 'end_time': _dt(0)}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final auction = BizAuction.fromJson((await api.post('/rancher/auctions', data: auctionData))['data'] as Map<String, dynamic>);
+    expect(auction.startingPrice, 400);
+    final auctions = [for (final j in (await api.get('/rancher/auctions'))['data'] as List) BizAuction.fromJson(j as Map<String, dynamic>)];
+    expect(auctions.any((a) => a.id == auction.id), isTrue);
+    await api.post('/rancher/auctions/${auction.id}/cancel');
+    final detail = BizAuction.fromJson((await api.get('/rancher/auctions/${auction.id}'))['data'] as Map<String, dynamic>);
+    expect(detail.status, 'cancelled');
+
+    await api.delete('/rancher/livestock/${created.id}');
+    final after = [for (final j in (await api.get('/rancher/livestock'))['data'] as List) BizLivestock.fromJson(j as Map<String, dynamic>)];
+    expect(after.any((a) => a.id == created.id), isFalse);
+  }, skip: skip);
+
+  test('proveedor: productos y pedidos de venta (comprobante, confirmar, preparar y enviar)', () async {
+    final buyer = await _as('comprador@agromarket.com');
+    final api = await _as('proveedor@agromarket.com');
+
+    expect(((await api.get('/supplier/profile'))['data'] as Map).containsKey('complete'), isTrue);
+    await expectLater(buyer.get('/supplier/products'), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 403)));
+
+    final categories = (await api.get('/product-categories'))['data'] as List;
+    final fields = {'name': 'Sal de contrato', 'description': 'Bolsa de 25 kg', 'price': '12.5', 'quantity': '40', 'unit': 'bolsa', 'category_id': '${(categories.first as Map)['id']}', 'status': 'available'};
+    await expectLater(api.postForm('/supplier/products', fields: {...fields, 'name': ''}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final product = BizProduct.fromJson((await api.postForm('/supplier/products', fields: fields))['data'] as Map<String, dynamic>);
+    expect(product.price, 12.5);
+    final edited = BizProduct.fromJson((await api.postForm('/supplier/products/${product.id}', fields: {...fields, 'price': '14', 'quantity': '30'}))['data'] as Map<String, dynamic>);
+    expect(edited.price, 14);
+    expect(edited.stock, 30);
+
+    // Pedido de un comprador sobre ese producto.
+    await buyer.delete('/cart');
+    await buyer.post('/cart/items', data: {'product_id': product.id, 'quantity': 2});
+    final checkout = await buyer.post('/checkout', data: {'shipping_address': 'Av. 9 de Octubre 100', 'shipping_city': 'Guayaquil', 'shipping_state': 'Guayas', 'phone': '0991234567', 'payment_method': 'transfer'});
+    final orderId = ((checkout['data'] as List).first as Map)['id'] as int;
+
+    final orders = [for (final j in (await api.get('/seller/orders'))['data'] as List) SellerOrder.fromJson(j as Map<String, dynamic>)];
+    final order = orders.firstWhere((o) => o.id == orderId);
+    expect(order.canConfirmPayment, isTrue);
+    expect(order.total, closeTo(28, 0.01));
+    expect(order.items.single, contains('Sal de contrato'));
+    final dash = SellerDashboard.fromJson((await api.get('/seller/dashboard'))['data'] as Map<String, dynamic>);
+    expect(dash.order('total'), greaterThanOrEqualTo(1));
+
+    await expectLater(api.post('/seller/orders/$orderId/ship'), throwsA(isA<ApiException>()));
+    final confirmed = SellerOrder.fromJson((await api.post('/seller/orders/$orderId/confirm-payment'))['data'] as Map<String, dynamic>);
+    expect(confirmed.status, 'confirmed');
+    final processing = SellerOrder.fromJson((await api.post('/seller/orders/$orderId/process'))['data'] as Map<String, dynamic>);
+    expect(processing.status, 'processing');
+    final shipped = SellerOrder.fromJson((await api.post('/seller/orders/$orderId/ship', data: {'tracking_number': 'TRK-123'}))['data'] as Map<String, dynamic>);
+    expect(shipped.status, 'shipped');
+    expect(shipped.trackingNumber, 'TRK-123');
+
+    // Un pedido ajeno no se puede tocar.
+    await expectLater(buyer.get('/seller/orders/$orderId'), throwsA(isA<ApiException>()));
+    await api.delete('/supplier/products/${product.id}');
+  }, skip: skip);
+
+  test('profesional: servicios y solicitudes (aceptar, programar, completar)', () async {
+    final buyer = await _as('comprador@agromarket.com');
+    final api = await _as('veterinario@agromarket.com');
+
+    expect(((await api.get('/professional/profile'))['data'] as Map).containsKey('complete'), isTrue);
+    await expectLater(buyer.get('/professional/services'), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 403)));
+
+    final categories = (await api.get('/service-categories'))['data'] as List;
+    final fields = {
+      'title': 'Vacunación de contrato', 'description': 'Vacunación completa con certificado', 'service_category_id': '${(categories.first as Map)['id']}',
+      'price': '25', 'price_type': 'por_visita', 'coverage_area': 'Guayas', 'home_visit': '1', 'emergency_service': '0', 'status': 'active',
+    };
+    await expectLater(api.postForm('/professional/services', fields: {...fields, 'title': ''}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final service = BizService.fromJson((await api.postForm('/professional/services', fields: fields))['data'] as Map<String, dynamic>);
+    expect(service.price, 25);
+    final edited = BizService.fromJson((await api.postForm('/professional/services/${service.id}', fields: {...fields, 'price': '30'}))['data'] as Map<String, dynamic>);
+    expect(edited.price, 30);
+
+    final tomorrow = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
+    final request = ServiceRequestItem.fromJson((await buyer.post('/services/${service.id}/requests', data: {'description': 'Vacunar 30 reses de la finca', 'request_date': tomorrow, 'location': 'Guayaquil'}))['data'] as Map<String, dynamic>);
+
+    final received = [for (final j in (await api.get('/professional/requests'))['data'] as List) ServiceRequestItem.fromJson(j as Map<String, dynamic>)];
+    expect(received.any((r) => r.id == request.id), isTrue);
+    final accepted = ServiceRequestItem.fromJson((await api.post('/professional/requests/${request.id}/accept'))['data'] as Map<String, dynamic>);
+    expect(accepted.status, 'accepted');
+    final scheduled = ServiceRequestItem.fromJson((await api.post('/professional/requests/${request.id}/schedule', data: {'scheduled_date': _dt(3), 'price_quoted': 28}))['data'] as Map<String, dynamic>);
+    expect(scheduled.status, 'scheduled');
+    final done = ServiceRequestItem.fromJson((await api.post('/professional/requests/${request.id}/complete', data: {'notes': 'Hecho'}))['data'] as Map<String, dynamic>);
+    expect(done.status, 'completed');
+
+    await api.delete('/professional/services/${service.id}');
+  }, skip: skip);
+
+  test('registro como ganadero, proveedor y profesional crea el rol y pide perfil', () async {
+    final cases = {
+      'ganadero': {'nombre_finca': 'La Esperanza', 'tipo_ganado': 'Bovino'},
+      'proveedor': {'nombre_empresa': 'Agro SA', 'nit': '0999999999001', 'tipo_productos': ['alimentos', 'vacunas']},
+      'profesional': {'profesion': 'veterinario', 'registro_profesional': 'REG-123'},
+    };
+    for (final e in cases.entries) {
+      final tokens = MemoryTokens();
+      final api = _client(tokens);
+      final body = await api.post('/auth/register', data: {
+        'name': 'Vendedor ${e.key}', 'email': '${e.key}${Random().nextInt(1 << 30)}@test.com', 'password': 'secreta123', 'password_confirmation': 'secreta123',
+        'phone': '0991234567', 'city': 'Quito', 'state': 'Pichincha', 'user_type': e.key, ...e.value,
+      });
+      final user = AppUser.fromJson(body['user'] as Map<String, dynamic>);
+      expect(user.identityVerified, isFalse, reason: e.key);
+      expect(user.roles.any((r) => r != 'buyer'), isTrue, reason: e.key);
+    }
   }, skip: skip);
 }
