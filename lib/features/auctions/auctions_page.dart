@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -71,7 +72,7 @@ class _AuctionCard extends StatelessWidget {
         onTap: () => context.push('/auctions/${auction.id}'),
         title: Text(auction.title),
         subtitle: Text('${auction.bidCount} pujas · ${countdown(auction.remaining)}'),
-        trailing: Text(money(auction.currentPrice), style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+        trailing: PriceTrailing(money(auction.currentPrice)),
       ),
     );
   }

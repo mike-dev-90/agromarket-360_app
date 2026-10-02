@@ -13,6 +13,10 @@ import 'package:agromarket_360_app/features/notifications/notifications_page.dar
 import 'package:agromarket_360_app/features/offers/offer_detail_page.dart';
 import 'package:agromarket_360_app/features/offers/offers_page.dart';
 import 'package:agromarket_360_app/features/orders/order_detail_page.dart';
+import 'package:agromarket_360_app/features/supplies/cart_page.dart';
+import 'package:agromarket_360_app/features/supplies/checkout_page.dart';
+import 'package:agromarket_360_app/features/supplies/product_detail_page.dart';
+import 'package:agromarket_360_app/features/supplies/supplies_page.dart';
 import 'package:agromarket_360_app/features/profile/password_page.dart';
 import 'package:agromarket_360_app/features/profile/profile_page.dart';
 import 'package:agromarket_360_app/features/profile/verification_page.dart';
@@ -31,6 +35,9 @@ FakeApi _seeded() {
   api.rejectionReason = longTitle;
   api.missingProfile = ['purchase_purpose'];
   api.favoriteId = 99;
+  api.cartItems.addAll([
+    for (var i = 1; i <= 3; i++) {'id': i, 'product_id': i, 'name': i == 1 ? 'Sal mineral para ganado bovino de engorde, bolsa de 25 kilos' : 'Balanceado $i', 'image': null, 'unit': 'bolsa', 'quantity': 12, 'unit_price': 1234567.5, 'stock': 50},
+  ]);
   api.favorites.add({'id': 99, 'type': 'livestock', 'item_id': 1, 'title': longTitle, 'price': 2000.0});
   api.offers.add({'id': 1, 'status': 'negotiating', 'offered_by': 'rancher', 'offer_price': 1800.0, 'message': longTitle, 'rancher_response': longTitle});
   api.orders.add({
@@ -82,6 +89,10 @@ void main() {
     'Cuenta': () => const AccountPage(),
     'Inicio de sesión': () => const LoginPage(),
     'Registro': () => const RegisterPage(),
+    'Insumos': () => const SuppliesPage(),
+    'Detalle de insumo': () => const ProductDetailPage(id: 1),
+    'Carrito': () => const CartPage(),
+    'Checkout': () => const CheckoutPage(),
     'Editar perfil': () => const ProfilePage(),
     'Cambiar contraseña': () => const PasswordPage(),
     'Verificación': () => const VerificationPage(),
@@ -108,7 +119,7 @@ void main() {
   testWidgets('el menú inferior con 5 accesos cabe en 320 px con texto grande', (tester) async {
     await _show(tester, const HomePage(), const Size(320, 568), 1.5);
     expect(find.byType(NavigationBar), findsOneWidget);
-    for (final label in ['Catálogo', 'Subastas', 'Ofertas', 'Pedidos', 'Cuenta']) {
+    for (final label in ['Explorar', 'Subastas', 'Ofertas', 'Pedidos', 'Cuenta']) {
       expect(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)), findsOneWidget);
     }
   });

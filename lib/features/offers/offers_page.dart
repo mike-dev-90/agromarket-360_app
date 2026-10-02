@@ -55,7 +55,7 @@ class OfferTile extends StatelessWidget {
         onTap: () => context.push('/offers/${offer.id}'),
         title: Text(offer.livestockTitle, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Text(offer.awaitingBuyer ? 'El vendedor respondió: te toca' : offer.statusLabel),
-        trailing: Text(money(offer.offerPrice), style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+        trailing: PriceTrailing(money(offer.offerPrice)),
       ),
     );
   }

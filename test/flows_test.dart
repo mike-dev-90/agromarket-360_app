@@ -28,6 +28,9 @@ Future<void> _closeApp(WidgetTester tester) async {
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  if (finder.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(finder, 300, scrollable: find.byType(Scrollable).first);
+  }
   await tester.ensureVisible(finder);
   await tester.pump(const Duration(milliseconds: 200));
   await tester.tap(finder);
@@ -293,6 +296,161 @@ void main() {
       await _settle(tester);
       expect(api.calls, contains('DELETE /favorites/99'));
       expect(find.textContaining('Aún no tienes favoritos'), findsOneWidget);
+      await _closeApp(tester);
+    });
+  });
+
+  group('Insumos, carrito y checkout', () {
+    Future<void> openSupplies(WidgetTester tester) async {
+      await tester.tap(find.text('Insumos'));
+      await _settle(tester);
+    }
+
+    testWidgets('explorar insumos: listar, buscar y abrir el detalle', (tester) async {
+      final api = FakeApi();
+      await _pumpApp(tester, api);
+      await openSupplies(tester);
+      expect(find.textContaining('Balanceado 2'), findsOneWidget);
+      expect(find.text('Sin stock'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).last, 'balanceado 4');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await _settle(tester);
+      expect(find.textContaining('Balanceado 4'), findsOneWidget);
+      expect(find.textContaining('Balanceado 2'), findsNothing);
+
+      await tester.tap(find.textContaining('Balanceado 4'));
+      await _settle(tester);
+      expect(find.text('Detalle del insumo'), findsOneWidget);
+      expect(find.text('Vendedor: Agro Insumos SA'), findsOneWidget);
+      await _closeApp(tester);
+    });
+
+    testWidgets('invitado que intenta agregar al carrito va al login', (tester) async {
+      final api = FakeApi();
+      await _pumpApp(tester, api);
+      await openSupplies(tester);
+      await tester.tap(find.textContaining('Balanceado 2'));
+      await _settle(tester);
+      await _tapVisible(tester, find.textContaining('Agregar al carrito'));
+      expect(find.text('Iniciar sesión'), findsWidgets);
+      expect(api.calls.where((c) => c.contains('/cart')), isEmpty);
+      await _closeApp(tester);
+    });
+
+    testWidgets('agregar con cantidad, límite de stock, cambiar cantidades, quitar y vaciar', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      await _pumpApp(tester, api);
+      await openSupplies(tester);
+      await tester.tap(find.textContaining('Balanceado 2'));
+      await _settle(tester);
+
+      // El stock es 5: el botón "más" se detiene en 5.
+      for (var i = 0; i < 8; i++) {
+        await tester.tap(find.byTooltip('Más'));
+        await tester.pump();
+      }
+      await _tapVisible(tester, find.textContaining('Agregar al carrito'));
+      expect(api.cartItems.single['quantity'], 5);
+      expect(find.text('Agregado al carrito.'), findsOneWidget);
+
+      // Agregar más supera el stock: el servidor lo rechaza y la app lo muestra.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 1));
+      await _tapVisible(tester, find.textContaining('Agregar al carrito'));
+      expect(find.text('Solo hay 5 disponibles de este producto.'), findsOneWidget);
+
+      await tester.pageBack();
+      await _settle(tester);
+      expect(find.text('1'), findsWidgets, reason: 'insignia del carrito');
+      await tester.tap(find.byTooltip('Carrito'));
+      await _settle(tester);
+      expect(find.text('Mi carrito'), findsOneWidget);
+      expect(find.text('\$105.00'), findsWidgets); // 5 x 21
+
+      await tester.tap(find.byTooltip('Menos'));
+      await _settle(tester);
+      expect(api.cartItems.single['quantity'], 4);
+      await tester.tap(find.byTooltip('Más'));
+      await _settle(tester);
+      await tester.tap(find.byTooltip('Más'));
+      await _settle(tester);
+      expect(api.cartItems.single['quantity'], 5, reason: 'no pasa del stock');
+      expect(find.text('Solo hay 5 disponibles de este producto.'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Quitar'));
+      await _settle(tester);
+      expect(find.text('Tu carrito está vacío.'), findsOneWidget);
+      expect(api.cartItems, isEmpty);
+      await _closeApp(tester);
+    });
+
+    testWidgets('checkout con un solo vendedor lleva al pedido; valida campos; transferencia o efectivo', (tester) async {
+      final api = FakeApi(loggedIn: true)..profile['state'] = null; // sin provincia previa: el menú abre desde el inicio
+      api.cartItems.add({'id': 1, 'product_id': 2, 'name': 'Balanceado 2', 'image': null, 'unit': 'bolsa', 'quantity': 2, 'unit_price': 21.0, 'stock': 5});
+      await _pumpApp(tester, api);
+      await tester.tap(find.byTooltip('Carrito'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Continuar con la compra'));
+      expect(find.text('Finalizar compra'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Dirección'), '');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Confirmar pedido'));
+      expect(find.text('Campo obligatorio'), findsWidgets);
+      expect(api.lastCheckout, isNull);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Dirección'), 'Av. 9 de Octubre 100');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Ciudad'), 'Guayaquil');
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>));
+      await _tapVisible(tester, find.text('Azuay').last);
+      await _tapVisible(tester, find.text('Efectivo contra entrega'));
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Confirmar pedido'));
+
+      expect(api.lastCheckout!['payment_method'], 'cash');
+      expect(api.lastCheckout!['shipping_state'], 'Azuay');
+      expect(api.cartItems, isEmpty);
+      expect(find.text('Detalle del pedido'), findsOneWidget);
+      expect(find.text('\$42.00'), findsWidgets);
+      await _closeApp(tester);
+    });
+
+    testWidgets('checkout con dos vendedores crea dos pedidos y vuelve al inicio', (tester) async {
+      final api = FakeApi(loggedIn: true)..profile['state'] = null; // sin provincia previa: el menú abre desde el inicio
+      api.cartItems.addAll([
+        {'id': 1, 'product_id': 2, 'name': 'Balanceado 2', 'image': null, 'unit': 'bolsa', 'quantity': 1, 'unit_price': 21.0, 'stock': 5},
+        {'id': 2, 'product_id': 1, 'name': 'Sal', 'image': null, 'unit': 'bolsa', 'quantity': 1, 'unit_price': 10.5, 'stock': 5},
+      ]);
+      await _pumpApp(tester, api);
+      await tester.tap(find.byTooltip('Carrito'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Continuar con la compra'));
+      await tester.enterText(find.widgetWithText(TextFormField, 'Dirección'), 'Calle 1');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Ciudad'), 'Quito');
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>));
+      await _tapVisible(tester, find.text('Azuay').last);
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Confirmar pedido'));
+      expect(api.orders, hasLength(2));
+      expect(find.text('Se crearon 2 pedidos (uno por vendedor).'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      await _closeApp(tester);
+    });
+
+    testWidgets('sin identidad verificada el servidor rechaza la compra y la app lo explica', (tester) async {
+      final api = FakeApi(loggedIn: true)
+        ..identityVerified = false
+        ..profile['state'] = null;
+      api.cartItems.add({'id': 1, 'product_id': 2, 'name': 'Balanceado 2', 'image': null, 'unit': 'bolsa', 'quantity': 1, 'unit_price': 21.0, 'stock': 5});
+      await _pumpApp(tester, api);
+      await tester.tap(find.byTooltip('Carrito'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Continuar con la compra'));
+      await tester.enterText(find.widgetWithText(TextFormField, 'Dirección'), 'Calle 1');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Ciudad'), 'Quito');
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>));
+      await _tapVisible(tester, find.text('Azuay').last);
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Confirmar pedido'));
+      expect(find.text('Debes verificar tu identidad para comprar.'), findsOneWidget);
+      expect(api.orders, isEmpty);
       await _closeApp(tester);
     });
   });

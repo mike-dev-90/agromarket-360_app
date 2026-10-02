@@ -43,7 +43,7 @@ class _OrdersBody extends ConsumerWidget {
                             onTap: () => context.push('/orders/${o.id}'),
                             title: Text(o.items.isEmpty ? 'Pedido #${o.id}' : o.items.map((i) => i.name).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis),
                             subtitle: Text('${o.number ?? '#${o.id}'} · ${o.statusLabel}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            trailing: Text(money(o.total), style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                            trailing: PriceTrailing(money(o.total)),
                           ),
                         );
                       },

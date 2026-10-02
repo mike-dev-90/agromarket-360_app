@@ -12,6 +12,7 @@ import 'package:agromarket_360_app/features/catalog/livestock.dart';
 import 'package:agromarket_360_app/features/notifications/notification_item.dart';
 import 'package:agromarket_360_app/features/offers/offer.dart';
 import 'package:agromarket_360_app/features/orders/order.dart';
+import 'package:agromarket_360_app/features/supplies/product.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -210,5 +211,47 @@ void main() {
     expect(state['status'], 'in_review');
     expect(state['attempts'], 1);
     expect(state['can_submit'], isTrue);
+  }, skip: skip);
+
+  test('insumos: catálogo, carrito con límites de stock y checkout real', () async {
+    final tokens = MemoryTokens();
+    final api = _client(tokens);
+
+    final list = await api.get('/products', query: {'per_page': 5});
+    final products = [for (final j in list['data'] as List) Product.fromJson(j as Map<String, dynamic>)];
+    expect(products, isNotEmpty);
+    expect(products.first.price, greaterThan(0));
+    final categories = await api.get('/product-categories');
+    expect((categories['data'] as List), isNotEmpty);
+    final detail = Product.fromJson((await api.get('/products/${products.first.id}'))['data'] as Map<String, dynamic>);
+    expect(detail.id, products.first.id);
+    await expectLater(api.get('/cart'), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 401)));
+
+    final login = await api.post('/auth/login', data: {'email': 'comprador@agromarket.com', 'password': 'password'});
+    await tokens.write(login['token'] as String);
+
+    await api.delete('/cart');
+    final p = products.firstWhere((x) => x.stock >= 2);
+    await expectLater(api.post('/cart/items', data: {'product_id': p.id, 'quantity': p.stock + 1}), throwsA(isA<ApiException>().having((e) => e.message, 'message', contains('disponibles'))));
+    var cart = Cart.fromJson((await api.post('/cart/items', data: {'product_id': p.id, 'quantity': 1}))['data'] as Map<String, dynamic>);
+    expect(cart.count, 1);
+    cart = Cart.fromJson((await api.put('/cart/items/${cart.items.single.id}', data: {'quantity': 2}))['data'] as Map<String, dynamic>);
+    expect(cart.items.single.quantity, 2);
+    expect(cart.total, closeTo(p.price * 2, 0.01));
+    cart = Cart.fromJson((await api.delete('/cart/items/${cart.items.single.id}'))['data'] as Map<String, dynamic>);
+    expect(cart.count, 0);
+
+    await expectLater(api.post('/checkout', data: {'payment_method': 'transfer'}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    await api.post('/cart/items', data: {'product_id': p.id, 'quantity': 1});
+    final created = await api.post('/checkout', data: {
+      'shipping_address': 'Av. 9 de Octubre 100', 'shipping_city': 'Guayaquil', 'shipping_state': 'Guayas', 'phone': '0991234567', 'payment_method': 'transfer',
+    });
+    final orderId = ((created['data'] as List).first as Map)['id'];
+    expect(Cart.fromJson((await api.get('/cart'))['data'] as Map<String, dynamic>).count, 0);
+
+    final order = Order.fromJson((await api.get('/orders/$orderId'))['data'] as Map<String, dynamic>);
+    expect(order.items.single.name, p.name);
+    expect(order.canSendProof, isTrue);
+    await api.post('/orders/$orderId/cancel');
   }, skip: skip);
 }

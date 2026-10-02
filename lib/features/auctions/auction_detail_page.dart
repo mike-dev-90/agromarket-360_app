@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/config.dart';
 import '../../core/format.dart';
+import '../../core/widgets.dart';
 import '../auth/auth_controller.dart';
 import 'auction.dart';
 
@@ -164,7 +165,7 @@ class _AuctionDetailPageState extends ConsumerState<AuctionDetailPage> with Widg
                     dense: true,
                     leading: Icon(b.isMine ? Icons.person : Icons.gavel),
                     title: Text(b.isMine ? 'Tú' : b.bidder),
-                    trailing: Text(money(b.amount)),
+                    trailing: PriceTrailing(money(b.amount), color: Theme.of(context).colorScheme.onSurface),
                   ),
               ]),
             ),

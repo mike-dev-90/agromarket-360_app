@@ -117,3 +117,20 @@ Future<bool> confirm(BuildContext context, String question) async {
   );
   return ok ?? false;
 }
+
+/// Importe para el extremo de un ListTile: nunca ocupa todo el ancho (se reduce si es muy grande).
+class PriceTrailing extends StatelessWidget {
+  const PriceTrailing(this.value, {super.key, this.color});
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 110),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color ?? Theme.of(context).colorScheme.primary)),
+        ),
+      );
+}

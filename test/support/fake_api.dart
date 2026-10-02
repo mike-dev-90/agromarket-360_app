@@ -24,6 +24,7 @@ class FakeApi extends ApiClient {
 
   final MemoryTokens tokens_;
   final calls = <String>[];
+  Map<String, dynamic>? lastCheckout;
 
   @override
   TokenStorage get tokens => tokens_;
@@ -42,6 +43,19 @@ class FakeApi extends ApiClient {
   double auctionPrice = 500;
   final bids = <Map<String, dynamic>>[];
   bool bankConfigured = true;
+
+  // Insumos y carrito
+  Map<String, dynamic> product(int id) => {
+        'id': id, 'name': id == 1 ? 'Sal mineral para ganado bovino de engorde, bolsa de 25 kilos' : 'Balanceado $id', 'price': 10.5 * id, 'unit': 'bolsa', 'stock': id == 3 ? 0 : 5,
+        'location': 'Quito', 'category': 'Alimentos y suplementos', 'image': null,
+      };
+  final cartItems = <Map<String, dynamic>>[];
+  int cartSeq = 0;
+  Map<String, dynamic> cartPayload() {
+    final lines = [for (final i in cartItems) {...i, 'total': (i['unit_price'] as double) * (i['quantity'] as int)}];
+    final total = lines.fold<double>(0, (a, l) => a + (l['total'] as double));
+    return {'items': lines, 'item_count': lines.length, 'subtotal': total, 'total': total};
+  }
   String livestockStatus = 'active';
 
   bool identityVerified = true;
@@ -94,12 +108,19 @@ class FakeApi extends ApiClient {
       final id = int.parse(path.split('/').last);
       return {'data': {...animal(id), 'description': longTitle * 2, 'sex': 'male', 'age_years': 2, 'weight': 400, 'is_vaccinated': true, 'health_notes': longTitle, 'images': <String>[], 'favorite_id': _auth ? favoriteId : null}};
     }
+    if (path == '/products') {
+      final search = (query?['search'] as String?)?.toLowerCase();
+      final all = [for (var i = 1; i <= 4; i++) product(i)].where((p) => search == null || (p['name'] as String).toLowerCase().contains(search)).toList();
+      return {'data': all, 'meta': {'current_page': 1, 'last_page': 1, 'total': all.length}};
+    }
+    if (path.startsWith('/products/')) return {'data': {...product(int.parse(path.split('/').last)), 'description': 'Suplemento mineral completo para todo tipo de ganado.', 'seller': {'id': 9, 'name': 'Agro Insumos SA'}}};
     if (path == '/auctions') {
       return {'data': [for (var i = 1; i <= 3; i++) _auction(i, now, withDetail: false)], 'meta': {'current_page': 1, 'last_page': 1, 'server_time': now.toIso8601String()}};
     }
     if (path.startsWith('/auctions/')) return {'data': _auction(1, now, withDetail: true)};
     if (!_auth) _unauth();
     if (path == '/favorites') return {'data': favorites};
+    if (path == '/cart') return {'data': cartPayload()};
     if (path == '/offers') return {'data': [for (final o in offers) offerPayload(o)]};
     if (path.startsWith('/offers/')) return {'data': offerPayload(offers.firstWhere((o) => '${o['id']}' == path.split('/').last))};
     if (path == '/orders') return {'data': [for (final o in orders) orderPayload(o)]};
@@ -147,6 +168,41 @@ class FakeApi extends ApiClient {
       favoriteId = 99;
       favorites.add({'id': 99, 'type': 'livestock', 'item_id': body['item_id'], 'title': animal(body['item_id'] as int)['title'], 'price': 2000.0});
       return {'id': 99};
+    }
+    if (path == '/cart/items') {
+      final id = body['product_id'] as int;
+      final qty = body['quantity'] as int;
+      final p = product(id);
+      final existing = cartItems.where((i) => i['product_id'] == id).firstOrNull;
+      final newQty = (existing?['quantity'] as int? ?? 0) + qty;
+      if (newQty > (p['stock'] as int)) _fail('Solo hay ${p['stock']} disponibles de este producto.');
+      if (existing != null) {
+        existing['quantity'] = newQty;
+      } else {
+        cartItems.add({'id': ++cartSeq, 'product_id': id, 'name': p['name'], 'image': null, 'unit': 'bolsa', 'quantity': newQty, 'unit_price': (p['price'] as double), 'stock': p['stock']});
+      }
+      return {'data': cartPayload()};
+    }
+    if (path == '/checkout') {
+      if (!identityVerified) throw ApiException('Debes verificar tu identidad para comprar.', statusCode: 403);
+      if (cartItems.isEmpty) _fail('Tu carrito está vacío.');
+      for (final k in ['shipping_address', 'shipping_city', 'shipping_state', 'phone']) {
+        if ((body[k] as String?)?.isEmpty ?? true) _fail('Falta $k.');
+      }
+      final bySeller = <int, List<Map<String, dynamic>>>{};
+      for (final i in cartItems) {
+        bySeller.putIfAbsent((i['product_id'] as int) % 2, () => []).add(i);
+      }
+      final created = <Map<String, dynamic>>[];
+      for (final group in bySeller.values) {
+        final total = group.fold<double>(0, (a, l) => a + (l['unit_price'] as double) * (l['quantity'] as int));
+        final id = 20 + orders.length;
+        orders.add({'id': id, 'order_number': 'AGM-$id', 'status': 'pending', 'payment_status': 'pending', 'payment_method': body['payment_method'], 'total': total, 'transfer_reference': null, 'items': [for (final l in group) {'name': l['name'], 'quantity': l['quantity'], 'unit_price': l['unit_price'], 'total': (l['unit_price'] as double) * (l['quantity'] as int)}]});
+        created.add({'id': id, 'order_number': 'AGM-$id', 'total': total, 'status': 'pending'});
+      }
+      lastCheckout = body;
+      cartItems.clear();
+      return {'data': created};
     }
     if (path == '/offers') {
       if ((body['offer_price'] as num) < 100) _fail('La oferta es demasiado baja.');
@@ -224,6 +280,13 @@ class FakeApi extends ApiClient {
       }
       return {'data': user};
     }
+    if (path.startsWith('/cart/items/')) {
+      final item = cartItems.firstWhere((i) => '${i['id']}' == path.split('/').last);
+      final q = body['quantity'] as int;
+      if (q > (item['stock'] as int)) _fail('Solo hay ${item['stock']} disponibles de este producto.');
+      item['quantity'] = q;
+      return {'data': cartPayload()};
+    }
     if (path == '/profile/password') {
       if (body['current_password'] != password) throw ApiException('La contraseña actual no es correcta.', statusCode: 422);
       password = body['password'] as String;
@@ -250,6 +313,14 @@ class FakeApi extends ApiClient {
   Future<Map<String, dynamic>> delete(String path) async {
     calls.add('DELETE $path');
     if (!_auth) _unauth();
+    if (path == '/cart') {
+      cartItems.clear();
+      return {'data': cartPayload()};
+    }
+    if (path.startsWith('/cart/items/')) {
+      cartItems.removeWhere((i) => '${i['id']}' == path.split('/').last);
+      return {'data': cartPayload()};
+    }
     if (path.startsWith('/favorites/')) {
       favoriteId = null;
       favorites.clear();
