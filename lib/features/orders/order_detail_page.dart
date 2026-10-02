@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../core/format.dart';
@@ -75,6 +76,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             const SizedBox(width: 12),
             Expanded(child: Text(money(o.total), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.bold))),
           ]),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            onPressed: () => context.push('/orders/${o.id}/messages'),
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('Mensajes con el vendedor'),
+          ),
           if (o.canSendProof) ...[
             const SizedBox(height: 20),
             _BankCard(bank: o.bank),

@@ -44,6 +44,11 @@ class FakeApi extends ApiClient {
   final bids = <Map<String, dynamic>>[];
   bool bankConfigured = true;
 
+  // Servicios y mensajes
+  Map<String, dynamic> service(int id) => {'id': id, 'title': id == 1 ? 'Vacunación y desparasitación completa de hatos bovinos con certificado sanitario' : 'Servicio $id', 'price': 25.0 * id, 'price_type': 'por_visita', 'category': 'Veterinaria General', 'image': null};
+  final serviceRequests = <Map<String, dynamic>>[];
+  final chat = <Map<String, dynamic>>[];
+
   // Insumos y carrito
   Map<String, dynamic> product(int id) => {
         'id': id, 'name': id == 1 ? 'Sal mineral para ganado bovino de engorde, bolsa de 25 kilos' : 'Balanceado $id', 'price': 10.5 * id, 'unit': 'bolsa', 'stock': id == 3 ? 0 : 5,
@@ -108,6 +113,13 @@ class FakeApi extends ApiClient {
       final id = int.parse(path.split('/').last);
       return {'data': {...animal(id), 'description': longTitle * 2, 'sex': 'male', 'age_years': 2, 'weight': 400, 'is_vaccinated': true, 'health_notes': longTitle, 'images': <String>[], 'favorite_id': _auth ? favoriteId : null}};
     }
+    if (path == '/service-categories') return {'data': [{'id': 1, 'name': 'Veterinaria General'}, {'id': 2, 'name': 'Nutrición'}]};
+    if (path == '/services') {
+      final cat = query?['category_id'];
+      final all = [for (var i = 1; i <= 3; i++) service(i)].where((s) => cat == null || (cat == '1' && (s['id'] as int).isOdd)).toList();
+      return {'data': all, 'meta': {'current_page': 1, 'last_page': 1, 'total': all.length}};
+    }
+    if (path.startsWith('/services/')) return {'data': {...service(int.parse(path.split('/').last)), 'description': 'Vacunación completa.', 'requirements': 'Corrales en buen estado', 'coverage_area': 'Costa y Sierra', 'home_visit': true, 'emergency_service': true, 'professional': {'id': 5, 'name': 'Dr. Roberto Sánchez', 'profession': 'Veterinario'}}};
     if (path == '/products') {
       final search = (query?['search'] as String?)?.toLowerCase();
       final all = [for (var i = 1; i <= 4; i++) product(i)].where((p) => search == null || (p['name'] as String).toLowerCase().contains(search)).toList();
@@ -120,6 +132,9 @@ class FakeApi extends ApiClient {
     if (path.startsWith('/auctions/')) return {'data': _auction(1, now, withDetail: true)};
     if (!_auth) _unauth();
     if (path == '/favorites') return {'data': favorites};
+    if (path == '/service-requests') return {'data': serviceRequests, 'meta': {'current_page': 1, 'last_page': 1}};
+    final msgs = RegExp(r'^/orders/(\d+)/messages$').firstMatch(path);
+    if (msgs != null) return {'data': chat, 'meta': {'other_user': {'id': 2, 'name': 'Hacienda La Esperanza'}, 'order_number': 'AGM-0005'}};
     if (path == '/cart') return {'data': cartPayload()};
     if (path == '/offers') return {'data': [for (final o in offers) offerPayload(o)]};
     if (path.startsWith('/offers/')) return {'data': offerPayload(offers.firstWhere((o) => '${o['id']}' == path.split('/').last))};
@@ -168,6 +183,23 @@ class FakeApi extends ApiClient {
       favoriteId = 99;
       favorites.add({'id': 99, 'type': 'livestock', 'item_id': body['item_id'], 'title': animal(body['item_id'] as int)['title'], 'price': 2000.0});
       return {'id': 99};
+    }
+    final svcReq = RegExp(r'^/services/(\d+)/requests$').firstMatch(path);
+    if (svcReq != null) {
+      if (((body['description'] as String?) ?? '').length < 10) _fail('The description field must be at least 10 characters.');
+      serviceRequests.add({'id': serviceRequests.length + 1, 'status': 'pending', 'service_title': service(int.parse(svcReq.group(1)!))['title'], 'description': body['description'], 'request_date': body['request_date'], 'preferred_time': body['preferred_time'], 'location': body['location'], 'scheduled_date': null, 'price_quoted': null, 'response_message': null, 'professional': {'id': 5, 'name': 'Dr. Roberto Sánchez'}});
+      return {'data': serviceRequests.last};
+    }
+    final cancelReq = RegExp(r'^/service-requests/(\d+)/cancel$').firstMatch(path);
+    if (cancelReq != null) {
+      serviceRequests.firstWhere((r) => '${r['id']}' == cancelReq.group(1))['status'] = 'cancelled';
+      return {'data': serviceRequests.first};
+    }
+    final sendMsg = RegExp(r'^/orders/(\d+)/messages$').firstMatch(path);
+    if (sendMsg != null) {
+      if (((body['message'] as String?) ?? '').trim().isEmpty) _fail('The message field is required.');
+      chat.add({'id': chat.length + 1, 'message': body['message'], 'is_mine': true, 'sender': 'Comprador Test'});
+      return {'data': chat.last};
     }
     if (path == '/cart/items') {
       final id = body['product_id'] as int;

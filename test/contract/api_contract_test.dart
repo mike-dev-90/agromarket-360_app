@@ -12,6 +12,8 @@ import 'package:agromarket_360_app/features/catalog/livestock.dart';
 import 'package:agromarket_360_app/features/notifications/notification_item.dart';
 import 'package:agromarket_360_app/features/offers/offer.dart';
 import 'package:agromarket_360_app/features/orders/order.dart';
+import 'package:agromarket_360_app/features/messages/order_messages_page.dart';
+import 'package:agromarket_360_app/features/services/service_models.dart';
 import 'package:agromarket_360_app/features/supplies/product.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -253,5 +255,42 @@ void main() {
     expect(order.items.single.name, p.name);
     expect(order.canSendProof, isTrue);
     await api.post('/orders/$orderId/cancel');
+  }, skip: skip);
+
+  test('servicios profesionales: catálogo, solicitud y cancelación; mensajes de un pedido', () async {
+    final tokens = MemoryTokens();
+    final api = _client(tokens);
+
+    final list = await api.get('/services');
+    final services = [for (final j in list['data'] as List) ServiceItem.fromJson(j as Map<String, dynamic>)];
+    expect(services, isNotEmpty);
+    final categories = await api.get('/service-categories');
+    expect(categories['data'], isNotEmpty);
+    final detail = ServiceItem.fromJson((await api.get('/services/${services.first.id}'))['data'] as Map<String, dynamic>);
+    expect(detail.title, services.first.title);
+
+    final login = await api.post('/auth/login', data: {'email': 'comprador@agromarket.com', 'password': 'password'});
+    await tokens.write(login['token'] as String);
+
+    await expectLater(api.post('/services/${services.first.id}/requests', data: {'description': 'corto'}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final tomorrow = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
+    final created = ServiceRequestItem.fromJson((await api.post('/services/${services.first.id}/requests', data: {'description': 'Vacunar 30 reses de la finca', 'request_date': tomorrow, 'location': 'Guayaquil'}))['data'] as Map<String, dynamic>);
+    expect(created.status, 'pending');
+    final mine = [for (final j in (await api.get('/service-requests'))['data'] as List) ServiceRequestItem.fromJson(j as Map<String, dynamic>)];
+    expect(mine.any((r) => r.id == created.id), isTrue);
+    final cancelled = ServiceRequestItem.fromJson((await api.post('/service-requests/${created.id}/cancel'))['data'] as Map<String, dynamic>);
+    expect(cancelled.status, 'cancelled');
+    expect(cancelled.clientCanCancel, isFalse);
+
+    // Mensajes de un pedido propio
+    final animal = (((await api.get('/livestock'))['data'] as List).firstWhere((a) => (a as Map)['id'] == 3) as Map);
+    final order = (await api.post('/orders', data: {'livestock_id': animal['id']}))['data'] as Map;
+    await expectLater(api.post('/orders/${order['id']}/messages', data: {'message': ''}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    await api.post('/orders/${order['id']}/messages', data: {'message': '¿Cuándo recojo?'});
+    final thread = await api.get('/orders/${order['id']}/messages');
+    final messages = [for (final j in thread['data'] as List) ChatMessage.fromJson(j as Map<String, dynamic>)];
+    expect(messages.single.isMine, isTrue);
+    expect((thread['meta'] as Map)['other_user'], isNotNull);
+    await api.post('/orders/${order['id']}/cancel');
   }, skip: skip);
 }

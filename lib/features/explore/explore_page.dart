@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../catalog/catalog_page.dart';
+import '../services/services_page.dart';
 import '../supplies/supplies_page.dart';
 
 /// Pestaña "Explorar": como el menú de la web (Ganado, Insumos, Servicios).
@@ -14,7 +15,7 @@ class ExplorePage extends StatefulWidget {
 class _ExplorePageState extends State<ExplorePage> {
   int _section = 0;
 
-  static const _labels = ['Ganado', 'Insumos'];
+  static const _labels = ['Ganado', 'Insumos', 'Servicios'];
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +30,7 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
       ),
       Expanded(
-        child: IndexedStack(index: _section, children: const [CatalogPage(), SuppliesPage()]),
+        child: IndexedStack(index: _section, children: const [CatalogPage(), SuppliesPage(), ServicesPage()]),
       ),
     ]);
   }

@@ -15,7 +15,10 @@ import 'features/supplies/checkout_page.dart';
 import 'features/supplies/product_detail_page.dart';
 import 'features/catalog/livestock_detail_page.dart';
 import 'features/favorites/favorites_page.dart';
+import 'features/messages/order_messages_page.dart';
 import 'features/notifications/notifications_page.dart';
+import 'features/services/service_detail_page.dart';
+import 'features/services/service_requests_page.dart';
 import 'features/offers/offer_detail_page.dart';
 import 'features/profile/password_page.dart';
 import 'features/profile/profile_page.dart';
@@ -32,6 +35,9 @@ GoRouter buildRouter() => GoRouter(routes: [
   GoRoute(path: '/offers/:id', builder: (_, s) => OfferDetailPage(id: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/orders/:id', builder: (_, s) => OrderDetailPage(id: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/products/:id', builder: (_, s) => ProductDetailPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/services/:id', builder: (_, s) => ServiceDetailPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/service-requests', builder: (_, __) => const ServiceRequestsPage()),
+  GoRoute(path: '/orders/:id/messages', builder: (_, s) => OrderMessagesPage(orderId: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/cart', builder: (_, __) => const CartPage()),
   GoRoute(path: '/checkout', builder: (_, __) => const CheckoutPage()),
   GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),

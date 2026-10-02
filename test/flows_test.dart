@@ -78,8 +78,7 @@ void main() {
       expect(find.text('comprador@test.com'), findsOneWidget);
       expect(find.text('Identidad verificada'), findsOneWidget);
 
-      await tester.tap(find.text('Cerrar sesión'));
-      await _settle(tester);
+      await _tapVisible(tester, find.text('Cerrar sesión'));
       expect(find.text('Inicia sesión para ofertar, pujar y comprar.'), findsOneWidget);
       expect(api.tokens_.token, isNull);
       await _closeApp(tester);
@@ -451,6 +450,101 @@ void main() {
       await _tapVisible(tester, find.widgetWithText(FilledButton, 'Confirmar pedido'));
       expect(find.text('Debes verificar tu identidad para comprar.'), findsOneWidget);
       expect(api.orders, isEmpty);
+      await _closeApp(tester);
+    });
+  });
+
+  group('Servicios profesionales y mensajes', () {
+    testWidgets('explorar servicios, filtrar por categoría y solicitar uno', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      await _pumpApp(tester, api);
+      await tester.tap(find.text('Servicios'));
+      await _settle(tester);
+      expect(find.textContaining('Servicio 2'), findsOneWidget);
+      expect(find.text('Veterinaria General'), findsOneWidget, reason: 'chips de categorías');
+
+      await tester.tap(find.text('Veterinaria General'));
+      await _settle(tester);
+      expect(find.textContaining('Servicio 2'), findsNothing);
+      await tester.tap(find.text('Todos').last);
+      await _settle(tester);
+
+      await tester.tap(find.textContaining('Servicio 2'));
+      await _settle(tester);
+      expect(find.text('Profesional'), findsOneWidget);
+      expect(find.text('Visita a domicilio'), findsOneWidget);
+      await tester.tap(find.text('Solicitar este servicio'));
+      await _settle(tester);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Describe lo que necesitas'), 'corto');
+      await tester.tap(find.text('Enviar solicitud'));
+      await _settle(tester);
+      expect(find.text('Escribe al menos 10 caracteres'), findsOneWidget);
+      expect(api.serviceRequests, isEmpty);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Describe lo que necesitas'), 'Vacunar 30 reses de la finca');
+      await tester.tap(find.text('Enviar solicitud'));
+      await _settle(tester);
+      expect(find.text('Solicitud enviada. El profesional te responderá pronto.'), findsOneWidget);
+      expect(api.serviceRequests.single['description'], 'Vacunar 30 reses de la finca');
+      await _closeApp(tester);
+    });
+
+    testWidgets('invitado que intenta solicitar un servicio va al login', (tester) async {
+      final api = FakeApi();
+      await _pumpApp(tester, api);
+      await tester.tap(find.text('Servicios'));
+      await _settle(tester);
+      await tester.tap(find.textContaining('Servicio 2'));
+      await _settle(tester);
+      await tester.tap(find.text('Solicitar este servicio'));
+      await _settle(tester);
+      expect(find.text('Iniciar sesión'), findsWidgets);
+      expect(api.calls.where((c) => c.contains('/requests')), isEmpty);
+      await _closeApp(tester);
+    });
+
+    testWidgets('mis solicitudes: ver estado y cancelar', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      api.serviceRequests.add({'id': 1, 'status': 'accepted', 'service_title': 'Vacunación', 'description': 'Vacunar 30 reses', 'request_date': '2030-01-15', 'location': 'Finca', 'scheduled_date': null, 'price_quoted': null, 'response_message': 'Nos vemos pronto', 'professional': {'id': 5, 'name': 'Dr. Sánchez'}});
+      await _pumpApp(tester, api);
+      await tester.tap(_tab('Cuenta'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Mis solicitudes de servicio'));
+      expect(find.text('Aceptada'), findsOneWidget);
+      expect(find.text('Respuesta: Nos vemos pronto'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar solicitud'));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Sí'));
+      await _settle(tester);
+      expect(api.serviceRequests.single['status'], 'cancelled');
+      expect(find.text('Cancelada'), findsOneWidget);
+      expect(find.text('Cancelar solicitud'), findsNothing);
+      await _closeApp(tester);
+    });
+
+    testWidgets('mensajes de un pedido: enviar y ver la conversación', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      api.orders.add({'id': 5, 'order_number': 'AGM-0005', 'status': 'pending', 'payment_status': 'pending', 'total': 2000.0, 'items': <Map<String, dynamic>>[]});
+      await _pumpApp(tester, api);
+      await tester.tap(_tab('Pedidos'));
+      await _settle(tester);
+      await tester.tap(find.byType(ListTile).first);
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Mensajes con el vendedor'));
+      expect(find.text('Chat con Hacienda La Esperanza'), findsOneWidget);
+      expect(find.textContaining('Aún no hay mensajes'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Enviar'));
+      await _settle(tester);
+      expect(api.chat, isEmpty, reason: 'no envía mensajes vacíos');
+
+      await tester.enterText(find.byType(TextField).last, '¿Cuándo puedo recoger?');
+      await tester.tap(find.byTooltip('Enviar'));
+      await _settle(tester);
+      expect(api.chat.single['message'], '¿Cuándo puedo recoger?');
+      expect(find.text('¿Cuándo puedo recoger?'), findsOneWidget);
       await _closeApp(tester);
     });
   });

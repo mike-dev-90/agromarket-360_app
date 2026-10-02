@@ -47,6 +47,7 @@ class AccountPage extends ConsumerWidget {
           Card(child: ListTile(leading: const Icon(Icons.person_outline), title: const Text('Editar perfil'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/profile'))),
           Card(child: ListTile(leading: const Icon(Icons.badge_outlined), title: const Text('Verificación de identidad'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/verification'))),
           Card(child: ListTile(leading: const Icon(Icons.lock_outline), title: const Text('Cambiar contraseña'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/profile/password'))),
+          Card(child: ListTile(leading: const Icon(Icons.medical_services_outlined), title: const Text('Mis solicitudes de servicio'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/service-requests'))),
           Card(child: ListTile(leading: const Icon(Icons.favorite_border), title: const Text('Mis favoritos'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/favorites'))),
           Card(child: ListTile(leading: const Icon(Icons.notifications_none), title: const Text('Notificaciones'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/notifications'))),
           const SizedBox(height: 16),

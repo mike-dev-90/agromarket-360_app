@@ -9,7 +9,11 @@ import 'package:agromarket_360_app/features/auth/login_page.dart';
 import 'package:agromarket_360_app/features/auth/register_page.dart';
 import 'package:agromarket_360_app/features/catalog/livestock_detail_page.dart';
 import 'package:agromarket_360_app/features/favorites/favorites_page.dart';
+import 'package:agromarket_360_app/features/messages/order_messages_page.dart';
 import 'package:agromarket_360_app/features/notifications/notifications_page.dart';
+import 'package:agromarket_360_app/features/services/service_detail_page.dart';
+import 'package:agromarket_360_app/features/services/service_requests_page.dart';
+import 'package:agromarket_360_app/features/services/services_page.dart';
 import 'package:agromarket_360_app/features/offers/offer_detail_page.dart';
 import 'package:agromarket_360_app/features/offers/offers_page.dart';
 import 'package:agromarket_360_app/features/orders/order_detail_page.dart';
@@ -35,6 +39,13 @@ FakeApi _seeded() {
   api.rejectionReason = longTitle;
   api.missingProfile = ['purchase_purpose'];
   api.favoriteId = 99;
+  api.serviceRequests.addAll([
+    {'id': 1, 'status': 'scheduled', 'service_title': longTitle, 'description': longTitle, 'request_date': '2030-01-15', 'preferred_time': 'Mañana', 'location': longTitle, 'scheduled_date': '2030-01-14T10:00:00Z', 'price_quoted': 1234567.5, 'response_message': longTitle, 'professional': {'id': 5, 'name': 'Dr. Roberto Sánchez de la Torre y Villacís'}},
+  ]);
+  api.chat.addAll([
+    {'id': 1, 'message': longTitle * 2, 'is_mine': true, 'sender': 'Yo'},
+    {'id': 2, 'message': longTitle * 2, 'is_mine': false, 'sender': 'Vendedor'},
+  ]);
   api.cartItems.addAll([
     for (var i = 1; i <= 3; i++) {'id': i, 'product_id': i, 'name': i == 1 ? 'Sal mineral para ganado bovino de engorde, bolsa de 25 kilos' : 'Balanceado $i', 'image': null, 'unit': 'bolsa', 'quantity': 12, 'unit_price': 1234567.5, 'stock': 50},
   ]);
@@ -89,6 +100,10 @@ void main() {
     'Cuenta': () => const AccountPage(),
     'Inicio de sesión': () => const LoginPage(),
     'Registro': () => const RegisterPage(),
+    'Servicios': () => const ServicesPage(),
+    'Detalle de servicio': () => const ServiceDetailPage(id: 1),
+    'Solicitudes de servicio': () => const ServiceRequestsPage(),
+    'Mensajes del pedido': () => const OrderMessagesPage(orderId: 5),
     'Insumos': () => const SuppliesPage(),
     'Detalle de insumo': () => const ProductDetailPage(id: 1),
     'Carrito': () => const CartPage(),
