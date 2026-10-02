@@ -25,13 +25,15 @@ class TokenStorage {
 }
 
 class ApiClient {
-  ApiClient(this._tokens)
-      : _dio = Dio(BaseOptions(
-          baseUrl: AppConfig.apiBaseUrl,
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 20),
-          headers: {'Accept': 'application/json'},
-        )) {
+  /// [dio] solo se inyecta en pruebas.
+  ApiClient(this._tokens, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: AppConfig.apiBaseUrl,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 20),
+              headers: {'Accept': 'application/json'},
+            )) {
     _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
       final token = await _tokens.read();
       if (token != null) options.headers['Authorization'] = 'Bearer $token';
@@ -65,6 +67,10 @@ class ApiClient {
   ApiException _toException(DioException e) {
     final status = e.response?.statusCode;
     final body = e.response?.data;
+
+    if (status == 429) {
+      return ApiException('Demasiados intentos seguidos. Espera un minuto e inténtalo de nuevo.', statusCode: 429);
+    }
 
     if (body is Map) {
       final raw = body['errors'];

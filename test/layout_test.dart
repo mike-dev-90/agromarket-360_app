@@ -1,67 +1,39 @@
 import 'package:agromarket_360_app/app.dart';
+import 'package:agromarket_360_app/core/api_client.dart';
 import 'package:agromarket_360_app/core/theme.dart';
 import 'package:agromarket_360_app/features/account/account_page.dart';
 import 'package:agromarket_360_app/features/auctions/auction_detail_page.dart';
 import 'package:agromarket_360_app/features/auctions/auctions_page.dart';
+import 'package:agromarket_360_app/features/auth/auth_controller.dart';
 import 'package:agromarket_360_app/features/auth/login_page.dart';
 import 'package:agromarket_360_app/features/auth/register_page.dart';
 import 'package:agromarket_360_app/features/catalog/livestock_detail_page.dart';
-import 'package:agromarket_360_app/core/api_client.dart';
-import 'package:agromarket_360_app/features/catalog/catalog_page.dart';
+import 'package:agromarket_360_app/features/favorites/favorites_page.dart';
+import 'package:agromarket_360_app/features/notifications/notifications_page.dart';
+import 'package:agromarket_360_app/features/offers/offer_detail_page.dart';
+import 'package:agromarket_360_app/features/offers/offers_page.dart';
+import 'package:agromarket_360_app/features/orders/order_detail_page.dart';
+import 'package:agromarket_360_app/features/orders/orders_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _long = 'Toro Brahman reproductor de excelente genética certificado con pedigrí y vacunas al día';
+import 'support/fake_api.dart';
 
-class FakeApi extends ApiClient {
-  FakeApi() : super(TokenStorage());
-
-  @override
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) async {
-    final now = DateTime.now().toUtc();
-    if (path == '/livestock') {
-      return {
-        'data': [
-          for (var i = 1; i <= 6; i++)
-            {
-              'id': i, 'title': _long, 'type': 'cattle', 'breed': 'Brahman cruzado con Nelore de pastoreo', 'price': 12345.5,
-              'negotiable': true, 'location': 'Santo Domingo de los Tsáchilas, Ecuador', 'province': 'Guayas', 'image': null,
-              'seller': {'id': 1, 'name': 'Hacienda La Esperanza de los Andes'},
-            }
-        ],
-        'meta': {'current_page': 1, 'last_page': 1, 'total': 6},
-      };
-    }
-    if (path.startsWith('/livestock/')) {
-      return {'data': {
-        'id': 1, 'title': _long, 'type': 'cattle', 'breed': 'Brahman', 'price': 2500.0, 'negotiable': true, 'location': 'Guayaquil, Guayas',
-        'image': null, 'seller': {'id': 1, 'name': 'Hacienda'}, 'description': _long * 3, 'sex': 'male', 'age_years': 2, 'weight': 400,
-        'is_vaccinated': true, 'health_notes': _long, 'images': <String>[],
-      }};
-    }
-    if (path == '/auctions') {
-      return {'data': [
-        for (var i = 1; i <= 4; i++)
-          {'id': i, 'title': _long, 'type': 'cattle', 'breed': 'Brahman', 'image': null, 'starting_price': 500, 'current_price': 1234567.5,
-           'min_bid_increment': 25, 'bid_count': 12, 'status': 'active', 'is_running': true,
-           'ends_at': now.add(const Duration(days: 2)).toIso8601String(), 'starts_at': now.toIso8601String(), 'server_time': now.toIso8601String()}
-      ], 'meta': {'current_page': 1, 'last_page': 1, 'server_time': now.toIso8601String()}};
-    }
-    if (path.startsWith('/auctions/')) {
-      return {'data': {
-        'id': 1, 'title': _long, 'type': 'cattle', 'breed': 'Brahman', 'image': null, 'starting_price': 500, 'current_price': 1234567.5,
-        'min_bid_increment': 25, 'bid_count': 12, 'status': 'active', 'is_running': true, 'description': _long, 'location': 'Guayaquil',
-        'minimum_next_bid': 1234592.5, 'my_highest_bid': 1200000, 'ends_at': now.add(const Duration(hours: 5)).toIso8601String(),
-        'starts_at': now.toIso8601String(), 'server_time': now.toIso8601String(),
-        'bids': [for (var i = 0; i < 8; i++) {'amount': 1000 + i, 'bidder': 'Comprador con un nombre muy largo número $i', 'is_mine': i == 0, 'created_at': now.toIso8601String()}],
-      }};
-    }
-    throw ApiException('Sin sesión', statusCode: 401);
-  }
+/// Servidor con datos ya cargados (favorito, oferta negociando, pedido enviado) y textos larguísimos.
+FakeApi _seeded() {
+  final api = FakeApi(loggedIn: true);
+  api.favoriteId = 99;
+  api.favorites.add({'id': 99, 'type': 'livestock', 'item_id': 1, 'title': longTitle, 'price': 2000.0});
+  api.offers.add({'id': 1, 'status': 'negotiating', 'offered_by': 'rancher', 'offer_price': 1800.0, 'message': longTitle, 'rancher_response': longTitle});
+  api.orders.add({
+    'id': 5, 'order_number': 'AGM-2026-000005-ABCDEFGH', 'status': 'pending', 'payment_status': 'pending', 'payment_method': 'transfer', 'total': 12345678.9, 'transfer_reference': null,
+    'items': [for (var i = 0; i < 3; i++) {'name': longTitle, 'quantity': 1, 'unit_price': 2000.0, 'total': 2000.0}],
+  });
+  return api;
 }
 
-Future<void> _show(WidgetTester tester, Widget page, Size size, double scale) async {
+Future<void> _show(WidgetTester tester, Widget page, Size size, double scale, {bool loggedIn = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   tester.platformDispatcher.textScaleFactorTestValue = scale;
@@ -70,7 +42,10 @@ Future<void> _show(WidgetTester tester, Widget page, Size size, double scale) as
     tester.platformDispatcher.clearAllTestValues();
   });
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiClientProvider.overrideWithValue(FakeApi())],
+    overrides: [
+      apiClientProvider.overrideWithValue(loggedIn ? _seeded() : FakeApi()),
+      if (loggedIn) authProvider.overrideWith(LoggedInAuth.new),
+    ],
     child: MaterialApp(theme: buildTheme(), home: Scaffold(body: page)),
   ));
   for (var i = 0; i < 4; i++) {
@@ -87,10 +62,16 @@ Future<void> _show(WidgetTester tester, Widget page, Size size, double scale) as
 
 void main() {
   final pages = <String, Widget Function()>{
-    'Catálogo': () => const CatalogPage(),
+    'Inicio con menú': () => const HomePage(),
     'Subastas': () => const AuctionsPage(),
     'Detalle de animal': () => const LivestockDetailPage(id: 1),
     'Detalle de subasta': () => const AuctionDetailPage(id: 1),
+    'Ofertas': () => const OffersPage(),
+    'Detalle de oferta': () => const OfferDetailPage(id: 1),
+    'Pedidos': () => const OrdersPage(),
+    'Detalle de pedido': () => const OrderDetailPage(id: 5),
+    'Favoritos': () => const FavoritesPage(),
+    'Notificaciones': () => const NotificationsPage(),
     'Cuenta': () => const AccountPage(),
     'Inicio de sesión': () => const LoginPage(),
     'Registro': () => const RegisterPage(),
@@ -106,13 +87,19 @@ void main() {
     }
   }
 
-  testWidgets('el menú inferior se ve completo en 320 px', (tester) async {
-    tester.view.physicalSize = const Size(320, 568);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(ProviderScope(overrides: [apiClientProvider.overrideWithValue(FakeApi())], child: const AgroMarketApp()));
-    await tester.pump(const Duration(milliseconds: 300));
+  // Invitado: las secciones privadas piden iniciar sesión sin desbordarse.
+  for (final e in {'Ofertas': () => const OffersPage(), 'Pedidos': () => const OrdersPage(), 'Cuenta': () => const AccountPage()}.entries) {
+    testWidgets('${e.key} como invitado en 320x568 con texto x1.5', (tester) async {
+      await _show(tester, e.value(), const Size(320, 568), 1.5, loggedIn: false);
+      expect(find.text('Iniciar sesión'), findsWidgets);
+    });
+  }
+
+  testWidgets('el menú inferior con 5 accesos cabe en 320 px con texto grande', (tester) async {
+    await _show(tester, const HomePage(), const Size(320, 568), 1.5);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    for (final label in ['Catálogo', 'Subastas', 'Ofertas', 'Pedidos', 'Cuenta']) {
+      expect(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)), findsOneWidget);
+    }
   });
 }

@@ -1,0 +1,3 @@
+tags:
+  contract:
+    description: Pruebas contra un servidor Laravel real (requieren --dart-define=CONTRACT_API=...)

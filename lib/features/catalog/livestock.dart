@@ -1,3 +1,6 @@
+/// La API puede enviar decimales como texto ("400.00"); se aceptan ambos.
+num? _asNum(Object? v) => v is num ? v : (v is String ? num.tryParse(v) : null);
+
 class Livestock {
   Livestock({
     required this.id,
@@ -16,6 +19,7 @@ class Livestock {
     this.healthNotes,
     this.isVaccinated = false,
     this.images = const [],
+    this.favoriteId,
   });
 
   final int id;
@@ -34,12 +38,13 @@ class Livestock {
   final String? healthNotes;
   final bool isVaccinated;
   final List<String> images;
+  final int? favoriteId;
 
   factory Livestock.fromJson(Map<String, dynamic> j) => Livestock(
         id: j['id'] as int,
         title: j['title'] as String,
         type: j['type'] as String,
-        price: (j['price'] as num).toDouble(),
+        price: _asNum(j['price'])?.toDouble() ?? 0,
         negotiable: j['negotiable'] == true,
         breed: j['breed'] as String?,
         location: j['location'] as String?,
@@ -47,11 +52,12 @@ class Livestock {
         sellerName: (j['seller'] as Map?)?['name'] as String?,
         description: j['description'] as String?,
         sex: j['sex'] as String?,
-        weight: j['weight'] as num?,
-        ageYears: j['age_years'] as int?,
+        weight: _asNum(j['weight']),
+        ageYears: _asNum(j['age_years'])?.toInt(),
         healthNotes: j['health_notes'] as String?,
         isVaccinated: j['is_vaccinated'] == true,
         images: [for (final i in (j['images'] as List? ?? const [])) '$i'],
+        favoriteId: j['favorite_id'] as int?,
       );
 }
 

@@ -42,6 +42,9 @@ class AccountPage extends ConsumerWidget {
               subtitle: user.identityVerified ? null : const Text('Verifica tu identidad en la web para poder ofertar, pujar y comprar.'),
             ),
           ),
+          const SizedBox(height: 8),
+          Card(child: ListTile(leading: const Icon(Icons.favorite_border), title: const Text('Mis favoritos'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/favorites'))),
+          Card(child: ListTile(leading: const Icon(Icons.notifications_none), title: const Text('Notificaciones'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/notifications'))),
           const SizedBox(height: 16),
           OutlinedButton.icon(onPressed: () => ref.read(authProvider.notifier).logout(), icon: const Icon(Icons.logout), label: const Text('Cerrar sesión')),
         ]);
