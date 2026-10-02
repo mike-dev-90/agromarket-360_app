@@ -1,6 +1,7 @@
 @Tags(['contract'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -40,7 +41,7 @@ void main() {
 
     final body = await api.post('/auth/register', data: {
       'name': 'Comprador App', 'email': email, 'password': 'secreta123', 'password_confirmation': 'secreta123',
-      'phone': '0991234567', 'city': 'Quito', 'state': 'Pichincha',
+      'phone': '0991234567', 'city': 'Quito', 'state': 'Pichincha', 'purchase_purpose': 'cria',
     });
     await tokens.write(body['token'] as String);
     final user = AppUser.fromJson(body['user'] as Map<String, dynamic>);
@@ -48,7 +49,7 @@ void main() {
 
     // Correo repetido: el mensaje llega legible.
     await expectLater(
-      api.post('/auth/register', data: {'name': 'X', 'email': email, 'password': 'secreta123', 'password_confirmation': 'secreta123', 'phone': '1', 'city': 'Q', 'state': 'P'}),
+      api.post('/auth/register', data: {'name': 'X', 'email': email, 'password': 'secreta123', 'password_confirmation': 'secreta123', 'phone': '1', 'city': 'Q', 'state': 'P', 'purchase_purpose': 'cria'}),
       throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)),
     );
 
@@ -162,5 +163,52 @@ void main() {
     expect(polled.myHighestBid, amount);
     expect(polled.bids.first.isMine, isTrue);
     expect(polled.minimumNextBid, greaterThan(amount));
+  }, skip: skip);
+
+  test('perfil, contraseña y verificación de identidad (subida de fotos real)', () async {
+    final tokens = MemoryTokens();
+    final api = _client(tokens);
+    final email = 'perfil${Random().nextInt(1 << 30)}@test.com';
+
+    final reg = await api.post('/auth/register', data: {
+      'name': 'Perfil App', 'email': email, 'password': 'secreta123', 'password_confirmation': 'secreta123',
+      'phone': '0991234567', 'city': 'Quito', 'state': 'Pichincha', 'purchase_purpose': 'consumo',
+    });
+    await tokens.write(reg['token'] as String);
+    final me = AppUser.fromJson((await api.get('/profile'))['data'] as Map<String, dynamic>);
+    expect(me.purchasePurpose, 'consumo');
+    expect(me.city, 'Quito');
+    expect(me.identityVerified, isFalse);
+
+    final updated = AppUser.fromJson((await api.put('/profile', data: {'name': 'Perfil Editado', 'email': email, 'city': 'Cuenca', 'state': 'Azuay', 'purchase_purpose': 'reventa'}))['data'] as Map<String, dynamic>);
+    expect(updated.name, 'Perfil Editado');
+    expect(updated.state, 'Azuay');
+    expect(updated.purchasePurpose, 'reventa');
+
+    await expectLater(api.put('/profile', data: {'name': 'X', 'email': 'comprador@agromarket.com'}), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    await expectLater(
+      api.put('/profile/password', data: {'current_password': 'mala', 'password': 'otraClave123', 'password_confirmation': 'otraClave123'}),
+      throwsA(isA<ApiException>().having((e) => e.message, 'message', contains('no es correcta'))),
+    );
+    await api.put('/profile/password', data: {'current_password': 'secreta123', 'password': 'otraClave123', 'password_confirmation': 'otraClave123'});
+    final relogin = await _client(MemoryTokens()).post('/auth/login', data: {'email': email, 'password': 'otraClave123'});
+    expect(relogin['token'], isA<String>());
+
+    // Verificación: estado inicial, envío multipart y revisión
+    final before = await api.get('/verification');
+    expect((before['data'] as Map)['status'], 'none');
+    expect((before['data'] as Map)['remaining_attempts'], 3);
+
+    final dir = Directory.systemTemp.createTempSync('agro_ver');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    final files = {for (final n in ['document_front', 'document_back', 'selfie']) n: (File('${dir.path}/$n.jpg')..writeAsBytesSync(png)).path};
+
+    await expectLater(api.postForm('/verification', fields: {'document_type': 'cedula'}, files: files), throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 422)));
+    final sent = await api.postForm('/verification', fields: {'document_type': 'cedula', 'document_number': '0912345678'}, files: files);
+    final state = sent['data'] as Map;
+    expect(state['status'], 'in_review');
+    expect(state['attempts'], 1);
+    expect(state['can_submit'], isTrue);
   }, skip: skip);
 }

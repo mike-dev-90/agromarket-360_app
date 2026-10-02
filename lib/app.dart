@@ -13,6 +13,9 @@ import 'features/catalog/livestock_detail_page.dart';
 import 'features/favorites/favorites_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/offers/offer_detail_page.dart';
+import 'features/profile/password_page.dart';
+import 'features/profile/profile_page.dart';
+import 'features/profile/verification_page.dart';
 import 'features/offers/offers_page.dart';
 import 'features/orders/order_detail_page.dart';
 import 'features/orders/orders_page.dart';
@@ -24,6 +27,9 @@ GoRouter buildRouter() => GoRouter(routes: [
   GoRoute(path: '/livestock/:id', builder: (_, s) => LivestockDetailPage(id: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/offers/:id', builder: (_, s) => OfferDetailPage(id: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/orders/:id', builder: (_, s) => OrderDetailPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
+  GoRoute(path: '/profile/password', builder: (_, __) => const PasswordPage()),
+  GoRoute(path: '/verification', builder: (_, __) => const VerificationPage()),
   GoRoute(path: '/favorites', builder: (_, __) => const FavoritesPage()),
   GoRoute(path: '/notifications', builder: (_, __) => const NotificationsPage()),
   GoRoute(path: '/auctions/:id', builder: (_, s) => AuctionDetailPage(id: int.parse(s.pathParameters['id']!))),

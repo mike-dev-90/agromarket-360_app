@@ -11,6 +11,8 @@ const provinces = [
   'Santa Elena', 'Santo Domingo de los Tsáchilas', 'Sucumbíos', 'Tungurahua', 'Zamora Chinchipe',
 ];
 
+const purchasePurposes = {'consumo': 'Consumo', 'reventa': 'Reventa', 'cria': 'Cría'};
+
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
 
@@ -27,6 +29,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   String? _state;
+  String? _purpose;
   bool _busy = false;
   String? _error;
 
@@ -51,6 +54,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         'phone': _phone.text.trim(),
         'city': _city.text.trim(),
         'state': _state!,
+        'purchase_purpose': _purpose!,
         'password': _password.text,
         'password_confirmation': _confirm.text,
       });
@@ -93,6 +97,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             ),
             const SizedBox(height: 16),
             TextFormField(controller: _city, decoration: const InputDecoration(labelText: 'Ciudad'), validator: _required),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _purpose,
+              decoration: const InputDecoration(labelText: '¿Para qué compras?'),
+              items: [for (final e in purchasePurposes.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+              onChanged: (v) => setState(() => _purpose = v),
+              validator: (v) => v == null ? 'Selecciona una opción' : null,
+            ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _password,

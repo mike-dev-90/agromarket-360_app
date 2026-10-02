@@ -3,18 +3,52 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 
 class AppUser {
-  AppUser({required this.id, required this.name, required this.email, required this.identityVerified});
+  AppUser({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.identityVerified,
+    this.phone,
+    this.whatsapp,
+    this.address,
+    this.city,
+    this.state,
+    this.purchasePurpose,
+    this.userType = 'buyer',
+    this.roles = const [],
+    this.missingProfile = const [],
+  });
 
   final int id;
   final String name;
   final String email;
   final bool identityVerified;
+  final String? phone;
+  final String? whatsapp;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? purchasePurpose;
+  final String userType;
+  final List<String> roles;
+  final List<String> missingProfile;
+
+  bool hasRole(String role) => roles.contains(role);
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
         id: json['id'] as int,
         name: json['name'] as String,
         email: json['email'] as String,
         identityVerified: json['identity_verified'] == true,
+        phone: json['phone'] as String?,
+        whatsapp: json['whatsapp'] as String?,
+        address: json['address'] as String?,
+        city: json['city'] as String?,
+        state: json['state'] as String?,
+        purchasePurpose: json['purchase_purpose'] as String?,
+        userType: (json['user_type'] as String?) ?? 'buyer',
+        roles: [for (final r in (json['roles'] as List? ?? const [])) '$r'],
+        missingProfile: [for (final r in (json['missing_profile'] as List? ?? const [])) '$r'],
       );
 }
 
@@ -44,6 +78,14 @@ class AuthController extends AsyncNotifier<AppUser?> {
     final body = await _api.post('/auth/register', data: {...data, 'device_name': 'app-android'});
     await _saveSession(body);
   }
+
+  /// Vuelve a pedir el usuario al servidor (p. ej. tras verificar identidad o editar el perfil).
+  Future<void> refreshUser() async {
+    final body = await _api.get('/profile');
+    state = AsyncData(AppUser.fromJson(body['data'] as Map<String, dynamic>));
+  }
+
+  void setUser(Map<String, dynamic> json) => state = AsyncData(AppUser.fromJson(json));
 
   Future<void> logout() async {
     try {

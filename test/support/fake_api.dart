@@ -1,4 +1,5 @@
 import 'package:agromarket_360_app/core/api_client.dart';
+import 'package:agromarket_360_app/core/photo_picker.dart';
 import 'package:agromarket_360_app/features/auth/auth_controller.dart';
 
 const longTitle = 'Toro Brahman reproductor de excelente genética certificado con pedigrí y vacunas al día';
@@ -43,7 +44,22 @@ class FakeApi extends ApiClient {
   bool bankConfigured = true;
   String livestockStatus = 'active';
 
-  Map<String, dynamic> get user => {'id': 7, 'name': 'Comprador Test', 'email': 'comprador@test.com', 'user_type': 'buyer', 'roles': ['buyer'], 'identity_verified': true};
+  bool identityVerified = true;
+  String verificationStatus = 'verified';
+  int verificationAttempts = 0;
+  String? rejectionReason;
+  List<String> missingProfile = [];
+  final profile = <String, dynamic>{'name': 'Comprador Test', 'email': 'comprador@test.com', 'phone': '0991234567', 'whatsapp': null, 'address': null, 'city': 'Quito', 'state': 'Pichincha', 'purchase_purpose': 'cria'};
+  String password = 'secreta123';
+  final formCalls = <Map<String, dynamic>>[];
+
+  Map<String, dynamic> get user => {'id': 7, ...profile, 'user_type': 'buyer', 'roles': ['buyer'], 'identity_verified': identityVerified, 'missing_profile': missingProfile};
+
+  Map<String, dynamic> verificationPayload() => {
+        'status': verificationStatus, 'document_type': null, 'document_number': null, 'attempts': verificationAttempts,
+        'remaining_attempts': 3 - verificationAttempts, 'rejection_reason': rejectionReason,
+        'can_submit': verificationStatus != 'verified' && verificationAttempts < 3, 'missing_profile': missingProfile, 'identity_verified': identityVerified,
+      };
 
   Map<String, dynamic> animal(int id) => {
         'id': id, 'title': id == 1 ? longTitle : 'Vaca $id', 'type': 'cattle', 'breed': 'Brahman', 'price': 2000.0, 'negotiable': true,
@@ -66,6 +82,8 @@ class FakeApi extends ApiClient {
     calls.add('GET $path');
     final now = DateTime.now().toUtc();
     if (path == '/auth/me') return _auth ? {'user': user} : _unauth();
+    if (path == '/profile') return _auth ? {'data': user} : _unauth();
+    if (path == '/verification') return _auth ? {'data': verificationPayload()} : _unauth();
     if (path == '/livestock') {
       return {
         'data': [for (var i = 1; i <= 6; i++) animal(i)],
@@ -192,6 +210,43 @@ class FakeApi extends ApiClient {
   }
 
   @override
+  Future<Map<String, dynamic>> put(String path, {Object? data}) async {
+    calls.add('PUT $path');
+    if (!_auth) _unauth();
+    final body = (data is Map ? data.cast<String, dynamic>() : <String, dynamic>{});
+    if (path == '/profile') {
+      if (!(body['email'] as String).contains('@')) throw ApiException('El correo no es válido.', statusCode: 422);
+      if (body['email'] == 'ocupado@test.com') throw ApiException('The email has already been taken.', statusCode: 422);
+      profile.addAll({for (final k in ['name', 'email', 'phone', 'whatsapp', 'address', 'city', 'state']) k: body[k]});
+      if (body['purchase_purpose'] != null) {
+        profile['purchase_purpose'] = body['purchase_purpose'];
+        missingProfile = missingProfile.where((m) => m != 'purchase_purpose').toList();
+      }
+      return {'data': user};
+    }
+    if (path == '/profile/password') {
+      if (body['current_password'] != password) throw ApiException('La contraseña actual no es correcta.', statusCode: 422);
+      password = body['password'] as String;
+      return {'message': 'ok'};
+    }
+    throw ApiException('No encontrado', statusCode: 404);
+  }
+
+  @override
+  Future<Map<String, dynamic>> postForm(String path, {Map<String, String> fields = const {}, Map<String, String> files = const {}}) async {
+    calls.add('POST(form) $path');
+    if (!_auth) _unauth();
+    formCalls.add({'path': path, 'fields': fields, 'files': files});
+    if (path == '/verification') {
+      if (files.length < 3) throw ApiException('Faltan imágenes.', statusCode: 422);
+      verificationAttempts++;
+      verificationStatus = 'in_review';
+      return {'data': verificationPayload()};
+    }
+    throw ApiException('No encontrado', statusCode: 404);
+  }
+
+  @override
   Future<Map<String, dynamic>> delete(String path) async {
     calls.add('DELETE $path');
     if (!_auth) _unauth();
@@ -208,4 +263,11 @@ class FakeApi extends ApiClient {
 class LoggedInAuth extends AuthController {
   @override
   Future<AppUser?> build() async => AppUser(id: 7, name: 'Comprador Test', email: 'comprador@test.com', identityVerified: true);
+}
+
+/// Selector de fotos que devuelve rutas ficticias.
+class FakePhotoPicker implements PhotoPicker {
+  int picks = 0;
+  @override
+  Future<String?> pick({required bool fromCamera}) async => '/tmp/foto_${picks++}.jpg';
 }

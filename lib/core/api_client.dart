@@ -52,7 +52,19 @@ class ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? data}) =>
       _send(() => _dio.post(path, data: data));
 
+  Future<Map<String, dynamic>> put(String path, {Object? data}) =>
+      _send(() => _dio.put(path, data: data));
+
   Future<Map<String, dynamic>> delete(String path) => _send(() => _dio.delete(path));
+
+  /// Envío multipart: [fields] son textos y [files] mapea nombre de campo -> ruta de archivo.
+  Future<Map<String, dynamic>> postForm(String path, {Map<String, String> fields = const {}, Map<String, String> files = const {}}) async {
+    final form = FormData.fromMap({
+      ...fields,
+      for (final e in files.entries) e.key: await MultipartFile.fromFile(e.value),
+    });
+    return _send(() => _dio.post(path, data: form));
+  }
 
   Future<Map<String, dynamic>> _send(Future<Response<dynamic>> Function() call) async {
     try {

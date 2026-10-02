@@ -13,6 +13,9 @@ import 'package:agromarket_360_app/features/notifications/notifications_page.dar
 import 'package:agromarket_360_app/features/offers/offer_detail_page.dart';
 import 'package:agromarket_360_app/features/offers/offers_page.dart';
 import 'package:agromarket_360_app/features/orders/order_detail_page.dart';
+import 'package:agromarket_360_app/features/profile/password_page.dart';
+import 'package:agromarket_360_app/features/profile/profile_page.dart';
+import 'package:agromarket_360_app/features/profile/verification_page.dart';
 import 'package:agromarket_360_app/features/orders/orders_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +26,10 @@ import 'support/fake_api.dart';
 /// Servidor con datos ya cargados (favorito, oferta negociando, pedido enviado) y textos larguísimos.
 FakeApi _seeded() {
   final api = FakeApi(loggedIn: true);
+  api.identityVerified = false;
+  api.verificationStatus = 'rejected';
+  api.rejectionReason = longTitle;
+  api.missingProfile = ['purchase_purpose'];
   api.favoriteId = 99;
   api.favorites.add({'id': 99, 'type': 'livestock', 'item_id': 1, 'title': longTitle, 'price': 2000.0});
   api.offers.add({'id': 1, 'status': 'negotiating', 'offered_by': 'rancher', 'offer_price': 1800.0, 'message': longTitle, 'rancher_response': longTitle});
@@ -75,6 +82,9 @@ void main() {
     'Cuenta': () => const AccountPage(),
     'Inicio de sesión': () => const LoginPage(),
     'Registro': () => const RegisterPage(),
+    'Editar perfil': () => const ProfilePage(),
+    'Cambiar contraseña': () => const PasswordPage(),
+    'Verificación': () => const VerificationPage(),
   };
 
   for (final scale in [1.0, 1.5]) {

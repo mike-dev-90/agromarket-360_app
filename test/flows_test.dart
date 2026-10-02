@@ -1,5 +1,6 @@
 import 'package:agromarket_360_app/app.dart';
 import 'package:agromarket_360_app/core/api_client.dart';
+import 'package:agromarket_360_app/core/photo_picker.dart';
 import 'package:agromarket_360_app/features/favorites/favorites_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,10 +113,13 @@ void main() {
       await _settle(tester);
       expect(find.text('Las contraseñas no coinciden'), findsOneWidget);
       expect(find.text('Selecciona tu provincia'), findsOneWidget);
+      expect(find.text('Selecciona una opción'), findsOneWidget);
       expect(api.calls.where((c) => c == 'POST /auth/register'), isEmpty);
 
-      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>));
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).first);
       await _tapVisible(tester, find.text('Azuay').last);
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).last);
+      await _tapVisible(tester, find.text('Cría').last);
       await fill('repetido@test.com');
       await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));
       await _settle(tester);
@@ -126,6 +130,109 @@ void main() {
       await _settle(tester);
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(api.tokens_.token, isNotNull);
+      await _closeApp(tester);
+    });
+  });
+
+  group('Perfil y verificación', () {
+    testWidgets('editar perfil guarda los cambios y valida el correo', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      await _pumpApp(tester, api);
+      await tester.tap(_tab('Cuenta'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Editar perfil'));
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Nombre completo'), 'Nombre Nuevo');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Correo electrónico'), 'ocupado@test.com');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Guardar cambios'));
+      expect(find.text('The email has already been taken.'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Correo electrónico'), 'nuevo@test.com');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Ciudad'), 'Cuenca');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Guardar cambios'));
+      expect(find.text('Perfil actualizado correctamente.'), findsOneWidget);
+      expect(api.profile['name'], 'Nombre Nuevo');
+      expect(api.profile['city'], 'Cuenca');
+      expect(api.profile['purchase_purpose'], 'cria');
+
+      await tester.pageBack();
+      await _settle(tester);
+      expect(find.text('Nombre Nuevo'), findsOneWidget, reason: 'la cuenta se actualiza sin volver a iniciar sesión');
+      await _closeApp(tester);
+    });
+
+    testWidgets('cambiar contraseña: contraseña actual incorrecta, no coinciden y éxito', (tester) async {
+      final api = FakeApi(loggedIn: true);
+      await _pumpApp(tester, api);
+      await tester.tap(_tab('Cuenta'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Cambiar contraseña'));
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Contraseña actual'), 'incorrecta');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Nueva contraseña (mínimo 8 caracteres)'), 'nuevaClave123');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Repite la nueva contraseña'), 'otraDistinta');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Actualizar contraseña'));
+      expect(find.text('Las contraseñas no coinciden'), findsOneWidget);
+      expect(api.calls.where((c) => c == 'PUT /profile/password'), isEmpty);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Repite la nueva contraseña'), 'nuevaClave123');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Actualizar contraseña'));
+      expect(find.text('La contraseña actual no es correcta.'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Contraseña actual'), 'secreta123');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Actualizar contraseña'));
+      expect(find.text('Contraseña actualizada correctamente.'), findsOneWidget);
+      expect(api.password, 'nuevaClave123');
+      await _closeApp(tester);
+    });
+
+    testWidgets('verificación: exige las 3 fotos, envía los documentos y queda en revisión', (tester) async {
+      final api = FakeApi(loggedIn: true)
+        ..identityVerified = false
+        ..verificationStatus = 'none';
+      final picker = FakePhotoPicker();
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(overrides: [apiClientProvider.overrideWithValue(api), photoPickerProvider.overrideWithValue(picker)], child: const AgroMarketApp()));
+      await _settle(tester);
+      await tester.tap(_tab('Cuenta'));
+      await _settle(tester);
+      expect(find.text('Identidad sin verificar'), findsOneWidget);
+      await _tapVisible(tester, find.text('Verificación de identidad'));
+      expect(find.text('Estado: Sin enviar'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Número de documento'), '0912345678');
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Enviar documentos'));
+      expect(find.text('Agrega las tres fotos: frente, reverso y selfie.'), findsOneWidget);
+      expect(api.formCalls, isEmpty);
+
+      for (final label in ['Documento (frente)', 'Documento (reverso)', 'Selfie sosteniendo el documento']) {
+        await _tapVisible(tester, find.text(label));
+        await _tapVisible(tester, find.text('Elegir de la galería'));
+      }
+      expect(picker.picks, 3);
+      await _tapVisible(tester, find.widgetWithText(FilledButton, 'Enviar documentos'));
+
+      expect(api.formCalls.single['fields'], {'document_type': 'cedula', 'document_number': '0912345678'});
+      expect((api.formCalls.single['files'] as Map).keys, ['document_front', 'document_back', 'selfie']);
+      expect(find.text('Estado: En revisión'), findsOneWidget);
+      expect(find.text('Enviar documentos'), findsOneWidget, reason: 'aún quedan intentos');
+      await _closeApp(tester);
+    });
+
+    testWidgets('verificada pero sin propósito de compra: avisa y lleva al perfil', (tester) async {
+      final api = FakeApi(loggedIn: true)
+        ..identityVerified = false
+        ..verificationStatus = 'verified'
+        ..missingProfile = ['purchase_purpose'];
+      await _pumpApp(tester, api);
+      await tester.tap(_tab('Cuenta'));
+      await _settle(tester);
+      await _tapVisible(tester, find.text('Verificación de identidad'));
+      expect(find.text('Antes de verificarte falta:'), findsOneWidget);
+      await _tapVisible(tester, find.text('Completar mi perfil'));
+      expect(find.text('Editar perfil'), findsWidgets);
       await _closeApp(tester);
     });
   });
