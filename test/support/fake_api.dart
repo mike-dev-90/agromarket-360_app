@@ -25,6 +25,12 @@ class FakeApi extends ApiClient {
   final MemoryTokens tokens_;
   final calls = <String>[];
   Map<String, dynamic>? lastCheckout;
+  Map<String, dynamic>? lastRegister;
+  Map<String, dynamic>? lastAuctionPayload;
+  Map<String, dynamic>? lastLivestockForm;
+  Map<String, dynamic>? lastProductForm;
+  Map<String, dynamic>? lastServiceForm;
+  Map<String, dynamic>? lastSchedule;
 
   @override
   TokenStorage get tokens => tokens_;
@@ -43,6 +49,17 @@ class FakeApi extends ApiClient {
   double auctionPrice = 500;
   final bids = <Map<String, dynamic>>[];
   bool bankConfigured = true;
+
+  // Negocio (vendedores)
+  final sellerOrders = <Map<String, dynamic>>[];
+  final myLivestock = <Map<String, dynamic>>[];
+  final myAuctions = <Map<String, dynamic>>[];
+  final rancherOffers = <Map<String, dynamic>>[];
+  final myProducts = <Map<String, dynamic>>[];
+  final myServices = <Map<String, dynamic>>[];
+  final proRequests = <Map<String, dynamic>>[];
+  final businessProfile = <String, dynamic>{'complete': false};
+  int nextId = 100;
 
   // Servicios y mensajes
   Map<String, dynamic> service(int id) => {'id': id, 'title': id == 1 ? 'Vacunación y desparasitación completa de hatos bovinos con certificado sanitario' : 'Servicio $id', 'price': 25.0 * id, 'price_type': 'por_visita', 'category': 'Veterinaria General', 'image': null};
@@ -72,7 +89,9 @@ class FakeApi extends ApiClient {
   String password = 'secreta123';
   final formCalls = <Map<String, dynamic>>[];
 
-  Map<String, dynamic> get user => {'id': 7, ...profile, 'user_type': 'buyer', 'roles': ['buyer'], 'identity_verified': identityVerified, 'missing_profile': missingProfile};
+  List<String> roles = ['buyer'];
+
+  Map<String, dynamic> get user => {'id': 7, ...profile, 'user_type': 'buyer', 'roles': roles, 'identity_verified': identityVerified, 'missing_profile': missingProfile};
 
   Map<String, dynamic> verificationPayload() => {
         'status': verificationStatus, 'document_type': null, 'document_number': null, 'attempts': verificationAttempts,
@@ -113,6 +132,42 @@ class FakeApi extends ApiClient {
       final id = int.parse(path.split('/').last);
       return {'data': {...animal(id), 'description': longTitle * 2, 'sex': 'male', 'age_years': 2, 'weight': 400, 'is_vaccinated': true, 'health_notes': longTitle, 'images': <String>[], 'favorite_id': _auth ? favoriteId : null}};
     }
+    if (path == '/seller/dashboard') {
+      return {'data': {
+        'orders': {'total': sellerOrders.length, 'pending': sellerOrders.where((o) => o['status'] == 'pending').length, 'in_progress': 1, 'delivered': 0, 'revenue': 1234567.5},
+        'livestock': {'total': myLivestock.length, 'active': myLivestock.where((l) => l['status'] == 'active').length, 'sold': 0},
+        'offers': {'total': rancherOffers.length, 'awaiting_you': rancherOffers.where((o) => o['awaiting_you'] == true).length},
+        'products': {'total': myProducts.length, 'available': myProducts.length},
+        'services': {'total': myServices.length},
+        'requests': {'pending': proRequests.where((r) => r['status'] == 'pending').length, 'completed': 0},
+      }};
+    }
+    if (path == '/seller/orders') {
+      final st = query?['status'];
+      final list = sellerOrders.where((o) => st == null || o['status'] == st).toList();
+      return {'data': list, 'meta': {'current_page': 1, 'last_page': 1}};
+    }
+    if (path == '/rancher/livestock') {
+      final st = query?['status'];
+      return {'data': myLivestock.where((l) => st == null || l['status'] == st).toList(), 'meta': {'current_page': 1, 'last_page': 1, 'total': myLivestock.length}};
+    }
+    if (RegExp(r'^/rancher/livestock/\d+$').hasMatch(path)) return {'data': myLivestock.firstWhere((l) => '${l['id']}' == path.split('/').last)};
+    if (path == '/rancher/auctions') return {'data': myAuctions, 'meta': {'current_page': 1, 'last_page': 1}};
+    if (RegExp(r'^/rancher/auctions/\d+$').hasMatch(path)) return {'data': myAuctions.firstWhere((a) => '${a['id']}' == path.split('/').last)};
+    if (path == '/rancher/offers') {
+      final st = query?['status'];
+      return {'data': rancherOffers.where((o) => st == null || o['status'] == st).toList(), 'meta': {'current_page': 1, 'last_page': 1}};
+    }
+    if (path == '/supplier/products') return {'data': myProducts, 'meta': {'current_page': 1, 'last_page': 1, 'total': myProducts.length}};
+    if (RegExp(r'^/supplier/products/\d+$').hasMatch(path)) return {'data': myProducts.firstWhere((p) => '${p['id']}' == path.split('/').last)};
+    if (path == '/professional/services') return {'data': myServices, 'meta': {'current_page': 1, 'last_page': 1, 'total': myServices.length}};
+    if (RegExp(r'^/professional/services/\d+$').hasMatch(path)) return {'data': myServices.firstWhere((p) => '${p['id']}' == path.split('/').last)};
+    if (path == '/professional/requests') {
+      final st = query?['status'];
+      return {'data': proRequests.where((r) => st == null || r['status'] == st).toList(), 'meta': {'current_page': 1, 'last_page': 1}};
+    }
+    if (const ['/rancher/profile', '/supplier/profile', '/professional/profile'].contains(path)) return {'data': businessProfile};
+    if (path == '/product-categories') return {'data': [{'id': 1, 'name': 'Alimentos y suplementos'}, {'id': 2, 'name': 'Medicamentos'}]};
     if (path == '/service-categories') return {'data': [{'id': 1, 'name': 'Veterinaria General'}, {'id': 2, 'name': 'Nutrición'}]};
     if (path == '/services') {
       final cat = query?['category_id'];
@@ -169,6 +224,7 @@ class FakeApi extends ApiClient {
       return {'token': 'tok', 'user': user};
     }
     if (path == '/auth/register') {
+      lastRegister = body;
       if (body['email'] == 'repetido@test.com') throw ApiException('The email has already been taken.', statusCode: 422);
       tokens_.token = 'tok';
       return {'token': 'tok', 'user': {...user, 'name': body['name']}};
@@ -183,6 +239,70 @@ class FakeApi extends ApiClient {
       favoriteId = 99;
       favorites.add({'id': 99, 'type': 'livestock', 'item_id': body['item_id'], 'title': animal(body['item_id'] as int)['title'], 'price': 2000.0});
       return {'id': 99};
+    }
+    final sellerAct = RegExp(r'^/seller/orders/(\d+)/(confirm-payment|process|ship)$').firstMatch(path);
+    if (sellerAct != null) {
+      final o = sellerOrders.firstWhere((o) => '${o['id']}' == sellerAct.group(1));
+      switch (sellerAct.group(2)) {
+        case 'confirm-payment':
+          if (o['status'] != 'pending') _fail('Este pedido ya no está pendiente de pago.');
+          o..['status'] = 'confirmed'..['payment_status'] = 'paid';
+        case 'process':
+          if (o['status'] != 'confirmed') _fail('Primero debes confirmar el pago.');
+          o['status'] = 'processing';
+        case 'ship':
+          if (o['status'] != 'confirmed' && o['status'] != 'processing') _fail('Solo se pueden enviar pedidos con el pago confirmado.');
+          o..['status'] = 'shipped'..['tracking_number'] = body['tracking_number'];
+      }
+      return {'data': o};
+    }
+    if (path == '/rancher/auctions') {
+      if ((body['title'] as String?)?.isEmpty ?? true) _fail('El título es obligatorio.');
+      final a = {'id': ++nextId, 'title': body['title'], 'description': body['description'], 'status': body['status'] == 'pending' ? 'active' : 'draft', 'starting_price': double.parse('${body['starting_price']}'), 'current_price': double.parse('${body['starting_price']}'), 'min_bid_increment': 25.0, 'bid_count': 0, 'is_running': true, 'starts_at': body['start_time'], 'ends_at': body['end_time'], 'bids': <Map<String, dynamic>>[], 'location': body['location']};
+      myAuctions.add(a);
+      lastAuctionPayload = body;
+      return {'data': a};
+    }
+    final aCancel = RegExp(r'^/rancher/auctions/(\d+)/cancel$').firstMatch(path);
+    if (aCancel != null) {
+      final a = myAuctions.firstWhere((a) => '${a['id']}' == aCancel.group(1));
+      if ((a['bids'] as List).isNotEmpty) _fail('No puedes cancelar una subasta que ya tiene pujas.');
+      a['status'] = 'cancelled';
+      return {'data': a};
+    }
+    final offerAct = RegExp(r'^/rancher/offers/(\d+)/(accept|reject|negotiate)$').firstMatch(path);
+    if (offerAct != null) {
+      final o = rancherOffers.firstWhere((o) => '${o['id']}' == offerAct.group(1));
+      if (o['awaiting_you'] != true) _fail('Esta oferta no está esperando tu respuesta.');
+      switch (offerAct.group(2)) {
+        case 'accept':
+          o..['status'] = 'accepted'..['awaiting_you'] = false;
+        case 'reject':
+          if ((body['rancher_response'] as String?)?.isEmpty ?? true) _fail('Indica el motivo.');
+          o..['status'] = 'rejected'..['awaiting_you'] = false..['rancher_response'] = body['rancher_response'];
+        case 'negotiate':
+          o..['status'] = 'negotiating'..['offered_by'] = 'rancher'..['offer_price'] = body['offer_price']..['awaiting_you'] = false;
+      }
+      return {'data': o};
+    }
+    final reqAct = RegExp(r'^/professional/requests/(\d+)/(accept|reject|schedule|complete)$').firstMatch(path);
+    if (reqAct != null) {
+      final r = proRequests.firstWhere((r) => '${r['id']}' == reqAct.group(1));
+      switch (reqAct.group(2)) {
+        case 'accept':
+          if (r['status'] != 'pending') _fail('Solo se pueden aceptar solicitudes pendientes.');
+          r['status'] = 'accepted';
+        case 'reject':
+          if ((body['response_message'] as String?)?.isEmpty ?? true) _fail('Indica el motivo.');
+          r..['status'] = 'rejected'..['response_message'] = body['response_message'];
+        case 'schedule':
+          r..['status'] = 'scheduled'..['scheduled_date'] = '2030-01-14T10:00:00Z'..['price_quoted'] = body['price_quoted'];
+          lastSchedule = body;
+        case 'complete':
+          if (r['status'] != 'accepted' && r['status'] != 'scheduled') _fail('Solo se pueden completar solicitudes aceptadas o programadas.');
+          r['status'] = 'completed';
+      }
+      return {'data': r};
     }
     final svcReq = RegExp(r'^/services/(\d+)/requests$').firstMatch(path);
     if (svcReq != null) {
@@ -319,6 +439,18 @@ class FakeApi extends ApiClient {
       item['quantity'] = q;
       return {'data': cartPayload()};
     }
+    if (const ['/rancher/profile', '/supplier/profile', '/professional/profile'].contains(path)) {
+      businessProfile.addAll(body);
+      businessProfile['complete'] = body.values.where((v) => v != null && v != '' && !(v is List && v.isEmpty)).length >= 5;
+      return {'data': businessProfile};
+    }
+    final auctionPut = RegExp(r'^/rancher/auctions/(\d+)$').firstMatch(path);
+    if (auctionPut != null) {
+      final a = myAuctions.firstWhere((a) => '${a['id']}' == auctionPut.group(1));
+      a..['title'] = body['title']..['description'] = body['description'];
+      lastAuctionPayload = body;
+      return {'data': a};
+    }
     if (path == '/profile/password') {
       if (body['current_password'] != password) throw ApiException('La contraseña actual no es correcta.', statusCode: 422);
       password = body['password'] as String;
@@ -332,6 +464,48 @@ class FakeApi extends ApiClient {
     calls.add('POST(form) $path');
     if (!_auth) _unauth();
     formCalls.add({'path': path, 'fields': fields, 'files': files});
+    if (path == '/rancher/livestock' || RegExp(r'^/rancher/livestock/\d+$').hasMatch(path)) {
+      final creating = path == '/rancher/livestock';
+      if (creating && !files.containsKey('main_image')) throw ApiException('The main image field is required.', statusCode: 422);
+      if (fields['title']?.isEmpty ?? true) throw ApiException('The title field is required.', statusCode: 422);
+      lastLivestockForm = {'fields': fields, 'files': files};
+      if (creating) {
+        final l = {'id': ++nextId, 'title': fields['title'], 'type': fields['type'], 'breed': fields['breed'], 'price': double.parse(fields['price']!), 'status': fields['status'], 'negotiable': fields['negotiable'] == '1', 'location': '${fields['city']}, ${fields['location']}', 'province': fields['location'], 'image': null, 'views': 0, 'offers_count': 0, 'description': fields['description'], 'sex': fields['sex'], 'age_years': null, 'age_months': null, 'weight': null, 'is_vaccinated': fields['is_vaccinated'] == '1', 'has_pedigree': false, 'health_notes': null, 'purpose': null, 'images': <Map<String, dynamic>>[]};
+        myLivestock.add(l);
+        return {'data': l};
+      }
+      final l = myLivestock.firstWhere((l) => '${l['id']}' == path.split('/').last);
+      l..['title'] = fields['title']..['price'] = double.parse(fields['price']!)..['status'] = fields['status'];
+      return {'data': l};
+    }
+    if (path == '/supplier/products' || RegExp(r'^/supplier/products/\d+$').hasMatch(path)) {
+      if (fields['name']?.isEmpty ?? true) throw ApiException('The name field is required.', statusCode: 422);
+      lastProductForm = {'fields': fields, 'files': files};
+      if (path == '/supplier/products') {
+        final p = {'id': ++nextId, 'name': fields['name'], 'price': double.parse(fields['price']!), 'unit': fields['unit'], 'stock': int.parse(fields['quantity']!), 'location': fields['location'], 'category': 'Alimentos y suplementos', 'category_id': int.parse(fields['category_id']!), 'image': null, 'status': fields['status'], 'description': fields['description']};
+        myProducts.add(p);
+        return {'data': p};
+      }
+      final p = myProducts.firstWhere((p) => '${p['id']}' == path.split('/').last);
+      p..['name'] = fields['name']..['price'] = double.parse(fields['price']!)..['stock'] = int.parse(fields['quantity']!)..['status'] = fields['status'];
+      return {'data': p};
+    }
+    if (path == '/professional/services' || RegExp(r'^/professional/services/\d+$').hasMatch(path)) {
+      if (fields['title']?.isEmpty ?? true) throw ApiException('The title field is required.', statusCode: 422);
+      lastServiceForm = fields;
+      if (path == '/professional/services') {
+        final sv = {'id': ++nextId, 'title': fields['title'], 'price': double.parse(fields['price']!), 'price_type': fields['price_type'], 'status': fields['status'], 'category': 'Veterinaria General', 'service_category_id': int.parse(fields['service_category_id']!), 'home_visit': fields['home_visit'] == '1', 'emergency_service': fields['emergency_service'] == '1', 'description': fields['description'], 'requirements': fields['requirements'], 'coverage_area': fields['coverage_area']};
+        myServices.add(sv);
+        return {'data': sv};
+      }
+      final sv = myServices.firstWhere((p) => '${p['id']}' == path.split('/').last);
+      sv..['title'] = fields['title']..['price'] = double.parse(fields['price']!)..['status'] = fields['status'];
+      return {'data': sv};
+    }
+    if (path == '/rancher/profile/document') {
+      businessProfile..['has_backup_document'] = true..['complete'] = true;
+      return {'data': businessProfile};
+    }
     if (path == '/verification') {
       if (files.length < 3) throw ApiException('Faltan imágenes.', statusCode: 422);
       verificationAttempts++;
@@ -345,6 +519,18 @@ class FakeApi extends ApiClient {
   Future<Map<String, dynamic>> delete(String path) async {
     calls.add('DELETE $path');
     if (!_auth) _unauth();
+    final delImg = RegExp(r'^/rancher/livestock/(\d+)/images/(\d+)$').firstMatch(path);
+    if (delImg != null) {
+      final l = myLivestock.firstWhere((l) => '${l['id']}' == delImg.group(1));
+      (l['images'] as List).removeWhere((i) => '${(i as Map)['id']}' == delImg.group(2));
+      return {'message': 'ok'};
+    }
+    for (final entry in {'/rancher/livestock/': myLivestock, '/rancher/auctions/': myAuctions, '/supplier/products/': myProducts, '/professional/services/': myServices}.entries) {
+      if (path.startsWith(entry.key)) {
+        entry.value.removeWhere((e) => '${e['id']}' == path.split('/').last);
+        return {'message': 'ok'};
+      }
+    }
     if (path == '/cart') {
       cartItems.clear();
       return {'data': cartPayload()};
@@ -364,8 +550,13 @@ class FakeApi extends ApiClient {
 
 /// Sesión ya iniciada, sin pasar por la red.
 class LoggedInAuth extends AuthController {
+  LoggedInAuth({this.roles = const ['buyer'], this.verified = true, this.missing = const []});
+  final List<String> roles;
+  final bool verified;
+  final List<String> missing;
+
   @override
-  Future<AppUser?> build() async => AppUser(id: 7, name: 'Comprador Test', email: 'comprador@test.com', identityVerified: true);
+  Future<AppUser?> build() async => AppUser(id: 7, name: 'Comprador Test', email: 'comprador@test.com', identityVerified: verified, roles: roles, missingProfile: missing);
 }
 
 /// Selector de fotos que devuelve rutas ficticias.

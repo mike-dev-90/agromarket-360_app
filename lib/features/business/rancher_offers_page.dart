@@ -27,29 +27,8 @@ class _RancherOffersPageState extends ConsumerState<RancherOffersPage> {
     }
   }
 
-  Future<String?> _askText(String title, {bool required = false}) async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: controller, maxLines: 3, decoration: InputDecoration(labelText: required ? 'Motivo' : 'Mensaje (opcional)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
-            onPressed: () {
-              if (required && controller.text.trim().isEmpty) return;
-              Navigator.pop(ctx, controller.text.trim());
-            },
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    return result;
-  }
+  Future<String?> _askText(String title, {bool required = false}) =>
+      askText(context, title: title, label: required ? 'Motivo' : 'Mensaje (opcional)', required: required);
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +54,7 @@ class _RancherOffersPageState extends ConsumerState<RancherOffersPage> {
               Row(children: [
                 Expanded(child: Text(o.livestockTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall)),
                 const SizedBox(width: 8),
-                Chip(label: Text(o.awaitingYou ? 'Te toca responder' : o.statusLabel), visualDensity: VisualDensity.compact),
+                Flexible(child: StatusBadge(o.awaitingYou ? 'Te toca responder' : o.statusLabel)),
               ]),
               if (o.buyerName != null) Text('Comprador: ${o.buyerName}'),
               const SizedBox(height: 4),

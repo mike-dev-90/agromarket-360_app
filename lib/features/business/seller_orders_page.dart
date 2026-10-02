@@ -29,21 +29,8 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
   }
 
   Future<void> _ship(SellerOrder o) async {
-    final controller = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Marcar como enviado'),
-        content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Número de guía (opcional)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(style: FilledButton.styleFrom(minimumSize: const Size(100, 44)), onPressed: () => Navigator.pop(ctx, true), child: const Text('Enviar')),
-        ],
-      ),
-    );
-    final tracking = controller.text.trim();
-    controller.dispose();
-    if (ok == true) {
+    final tracking = await askText(context, title: 'Marcar como enviado', label: 'Número de guía (opcional)');
+    if (tracking != null) {
       await _act(o, 'ship', data: {if (tracking.isNotEmpty) 'tracking_number': tracking}, done: 'Pedido marcado como enviado.');
     }
   }
@@ -97,7 +84,7 @@ class _OrderCard extends StatelessWidget {
           Row(children: [
             Expanded(child: Text(o.number ?? 'Pedido #${o.id}', style: Theme.of(context).textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 8),
-            Chip(label: Text(o.statusLabel), visualDensity: VisualDensity.compact),
+            Flexible(child: StatusBadge(o.statusLabel)),
           ]),
           if (o.buyerName != null) Text('Comprador: ${o.buyerName}${o.buyerPhone != null ? ' · ${o.buyerPhone}' : ''}'),
           const SizedBox(height: 6),

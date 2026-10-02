@@ -218,29 +218,8 @@ class _ProfessionalRequestsPageState extends ConsumerState<ProfessionalRequestsP
     }
   }
 
-  Future<String?> _askText(String title, String label, {bool required = false}) async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: controller, maxLines: 3, decoration: InputDecoration(labelText: label)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
-            onPressed: () {
-              if (required && controller.text.trim().isEmpty) return;
-              Navigator.pop(ctx, controller.text.trim());
-            },
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    return result;
-  }
+  Future<String?> _askText(String title, String label, {bool required = false}) =>
+      askText(context, title: title, label: label, required: required);
 
   Future<void> _schedule(ServiceRequestItem r) async {
     final when = await pickDateTime(context, initial: DateTime.now().add(const Duration(days: 1)), first: DateTime.now());

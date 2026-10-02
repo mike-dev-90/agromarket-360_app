@@ -74,7 +74,7 @@ class ServiceRequestCard extends StatelessWidget {
           Row(children: [
             Expanded(child: Text(item.serviceTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall)),
             const SizedBox(width: 8),
-            Chip(label: Text(item.statusLabel), visualDensity: VisualDensity.compact),
+            Flexible(child: StatusBadge(item.statusLabel)),
           ]),
           if (item.otherParty != null) Text(item.otherParty!, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),

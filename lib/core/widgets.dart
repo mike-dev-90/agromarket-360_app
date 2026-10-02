@@ -134,3 +134,59 @@ class PriceTrailing extends StatelessWidget {
         ),
       );
 }
+
+/// Etiqueta de estado que se reduce (con puntos suspensivos) en vez de desbordarse.
+class StatusBadge extends StatelessWidget {
+  const StatusBadge(this.label, {super.key});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: Theme.of(context).colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(16)),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSecondaryContainer)),
+      );
+}
+
+
+/// Pide un texto corto; devuelve null si se cancela. Si [required], no deja enviar vacío.
+Future<String?> askText(BuildContext context, {required String title, required String label, bool required = false, String action = 'Enviar'}) {
+  return showDialog<String>(context: context, builder: (_) => _AskTextDialog(title: title, label: label, required: required, action: action));
+}
+
+class _AskTextDialog extends StatefulWidget {
+  const _AskTextDialog({required this.title, required this.label, required this.required, required this.action});
+  final String title, label, action;
+  final bool required;
+
+  @override
+  State<_AskTextDialog> createState() => _AskTextDialogState();
+}
+
+class _AskTextDialogState extends State<_AskTextDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: TextField(controller: _controller, maxLines: 3, minLines: 1, decoration: InputDecoration(labelText: widget.label)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
+            onPressed: () {
+              final text = _controller.text.trim();
+              if (widget.required && text.isEmpty) return;
+              Navigator.pop(context, text);
+            },
+            child: Text(widget.action),
+          ),
+        ],
+      );
+}
