@@ -44,6 +44,9 @@ elemento `<application ...>` el atributo `android:usesCleartextTraffic="true"` (
 
 ## Pruebas
 
+`test/layout_test.dart` abre cada pantalla en móviles pequeños (320x568 y 360x640) con texto agrandado y datos con
+títulos larguísimos, y falla si algo se desborda (la banda amarilla y negra).
+
 ```powershell
 flutter test
 flutter analyze

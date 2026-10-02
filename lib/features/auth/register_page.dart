@@ -84,7 +84,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             TextFormField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono'), validator: _required),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _state,
+              isExpanded: true,
+              initialValue: _state,
               decoration: const InputDecoration(labelText: 'Provincia'),
               items: [for (final p in provinces) DropdownMenuItem(value: p, child: Text(p))],
               onChanged: (v) => setState(() => _state = v),
