@@ -118,9 +118,10 @@ void main() {
       expect(find.text('Selecciona una opción'), findsOneWidget);
       expect(api.calls.where((c) => c == 'POST /auth/register'), isEmpty);
 
-      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).first);
+      // 0 = tipo de cuenta, 1 = provincia, 2 = propósito de compra
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).at(1));
       await _tapVisible(tester, find.text('Azuay').last);
-      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).last);
+      await _tapVisible(tester, find.byType(DropdownButtonFormField<String>).at(2));
       await _tapVisible(tester, find.text('Cría').last);
       await fill('repetido@test.com');
       await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));

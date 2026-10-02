@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
+import '../business/business_home_page.dart';
 
 class AccountPage extends ConsumerWidget {
   const AccountPage({super.key});
@@ -44,6 +45,7 @@ class AccountPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
+          if (isSeller(user)) Card(color: Colors.green.shade50, child: ListTile(leading: const Icon(Icons.storefront), title: const Text('Mi negocio'), subtitle: const Text('Publicaciones, ventas y pedidos'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/business'))),
           Card(child: ListTile(leading: const Icon(Icons.person_outline), title: const Text('Editar perfil'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/profile'))),
           Card(child: ListTile(leading: const Icon(Icons.badge_outlined), title: const Text('Verificación de identidad'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/verification'))),
           Card(child: ListTile(leading: const Icon(Icons.lock_outline), title: const Text('Cambiar contraseña'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/profile/password'))),

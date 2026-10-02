@@ -18,6 +18,7 @@ class PagedSearchList<T> extends ConsumerStatefulWidget {
     this.emptyText = 'No hay resultados.',
     this.emptyIcon = Icons.search_off,
     this.allLabel = 'Todos',
+    this.showSearch = true,
   });
 
   final PageFetcher<T> fetch;
@@ -27,12 +28,16 @@ class PagedSearchList<T> extends ConsumerStatefulWidget {
   final String emptyText;
   final IconData emptyIcon;
   final String allLabel;
+  final bool showSearch;
 
   @override
-  ConsumerState<PagedSearchList<T>> createState() => _PagedSearchListState<T>();
+  ConsumerState<PagedSearchList<T>> createState() => PagedSearchListState<T>();
 }
 
-class _PagedSearchListState<T> extends ConsumerState<PagedSearchList<T>> {
+class PagedSearchListState<T> extends ConsumerState<PagedSearchList<T>> {
+  /// Vuelve a cargar desde la primera página (p. ej. tras crear o editar un elemento).
+  Future<void> reload() => _reload();
+
   final _scroll = ScrollController();
   final _search = TextEditingController();
   final _items = <T>[];
@@ -93,7 +98,13 @@ class _PagedSearchListState<T> extends ConsumerState<PagedSearchList<T>> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      Padding(
+      if (widget.showSearch) _searchField(),
+      if (widget.filters != null) _filterChips(),
+      Expanded(child: _body()),
+    ]);
+  }
+
+  Widget _searchField() => Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
         child: TextField(
           controller: _search,
@@ -101,38 +112,49 @@ class _PagedSearchListState<T> extends ConsumerState<PagedSearchList<T>> {
           decoration: InputDecoration(
             hintText: widget.searchHint,
             prefixIcon: const Icon(Icons.search),
-            suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: () {
-              _search.clear();
-              _reload();
-            }),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                _search.clear();
+                _reload();
+              },
+            ),
           ),
           onSubmitted: (_) => _reload(),
         ),
-      ),
-      if (widget.filters != null)
-        SizedBox(
+      );
+
+  Widget _filterChips() => Padding(
+        padding: EdgeInsets.only(top: widget.showSearch ? 0 : 8),
+        child: SizedBox(
           height: 48,
           child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: [
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(label: Text(widget.allLabel), selected: _filter == null, onSelected: (_) {
-                _filter = null;
-                _reload();
-              }),
+              child: ChoiceChip(
+                label: Text(widget.allLabel),
+                selected: _filter == null,
+                onSelected: (_) {
+                  _filter = null;
+                  _reload();
+                },
+              ),
             ),
             for (final e in widget.filters!.entries)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(label: Text(e.value), selected: _filter == e.key, onSelected: (_) {
-                  _filter = e.key;
-                  _reload();
-                }),
+                child: ChoiceChip(
+                  label: Text(e.value),
+                  selected: _filter == e.key,
+                  onSelected: (_) {
+                    _filter = e.key;
+                    _reload();
+                  },
+                ),
               ),
           ]),
         ),
-      Expanded(child: _body()),
-    ]);
-  }
+      );
 
   Widget _body() {
     if (_items.isEmpty && _loading) return const Center(child: CircularProgressIndicator());

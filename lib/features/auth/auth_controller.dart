@@ -74,7 +74,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
     await _saveSession(body);
   }
 
-  Future<void> register(Map<String, String> data) async {
+  Future<void> register(Map<String, dynamic> data) async {
     final body = await _api.post('/auth/register', data: {...data, 'device_name': 'app-android'});
     await _saveSession(body);
   }

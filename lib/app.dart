@@ -8,6 +8,15 @@ import 'features/auctions/auction_detail_page.dart';
 import 'features/auctions/auctions_page.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
+import 'features/business/business_home_page.dart';
+import 'features/business/business_profile_pages.dart';
+import 'features/business/livestock_form_page.dart';
+import 'features/business/professional_pages.dart';
+import 'features/business/rancher_auctions_page.dart';
+import 'features/business/rancher_livestock_page.dart';
+import 'features/business/rancher_offers_page.dart';
+import 'features/business/seller_orders_page.dart';
+import 'features/business/supplier_products_page.dart';
 import 'features/explore/explore_page.dart';
 import 'features/supplies/cart_page.dart';
 import 'features/supplies/cart_provider.dart';
@@ -40,6 +49,26 @@ GoRouter buildRouter() => GoRouter(routes: [
   GoRoute(path: '/orders/:id/messages', builder: (_, s) => OrderMessagesPage(orderId: int.parse(s.pathParameters['id']!))),
   GoRoute(path: '/cart', builder: (_, __) => const CartPage()),
   GoRoute(path: '/checkout', builder: (_, __) => const CheckoutPage()),
+  GoRoute(path: '/business', builder: (_, __) => const BusinessHomePage()),
+  GoRoute(path: '/business/orders', builder: (_, __) => const SellerOrdersPage()),
+  GoRoute(path: '/business/rancher-profile', builder: (_, __) => const RancherProfilePage()),
+  GoRoute(path: '/business/supplier-profile', builder: (_, __) => const SupplierProfilePage()),
+  GoRoute(path: '/business/professional-profile', builder: (_, __) => const ProfessionalProfilePage()),
+  GoRoute(path: '/business/livestock', builder: (_, __) => const RancherLivestockPage()),
+  GoRoute(path: '/business/livestock/new', builder: (_, __) => const LivestockFormPage()),
+  GoRoute(path: '/business/livestock/:id/edit', builder: (_, s) => LivestockFormPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/business/auctions', builder: (_, __) => const RancherAuctionsPage()),
+  GoRoute(path: '/business/auctions/new', builder: (_, __) => const AuctionFormPage()),
+  GoRoute(path: '/business/auctions/:id', builder: (_, s) => RancherAuctionDetailPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/business/auctions/:id/edit', builder: (_, s) => AuctionFormPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/business/offers', builder: (_, __) => const RancherOffersPage()),
+  GoRoute(path: '/business/products', builder: (_, __) => const SupplierProductsPage()),
+  GoRoute(path: '/business/products/new', builder: (_, __) => const ProductFormPage()),
+  GoRoute(path: '/business/products/:id/edit', builder: (_, s) => ProductFormPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/business/services', builder: (_, __) => const ProfessionalServicesPage()),
+  GoRoute(path: '/business/services/new', builder: (_, __) => const ServiceFormPage()),
+  GoRoute(path: '/business/services/:id/edit', builder: (_, s) => ServiceFormPage(id: int.parse(s.pathParameters['id']!))),
+  GoRoute(path: '/business/requests', builder: (_, __) => const ProfessionalRequestsPage()),
   GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
   GoRoute(path: '/profile/password', builder: (_, __) => const PasswordPage()),
   GoRoute(path: '/verification', builder: (_, __) => const VerificationPage()),
